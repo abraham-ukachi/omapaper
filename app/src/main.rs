@@ -254,8 +254,10 @@ fn wait_for_daemon(base: &str, tenths: usize) {
 }
 
 fn default_data_dir() -> PathBuf {
-    PathBuf::from(std::env::var_os("HOME").unwrap_or_else(|| ".".into()))
-        .join(".local/share/omapaper")
+    omapaper_core::Store::default_path()
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 /// Paints the window with Omarchy's current theme.
@@ -400,8 +402,21 @@ fn open_url(base: &str, canvas: Option<&str>, browser: bool) {
             }
         }
     }
+    #[cfg(target_os = "linux")]
     let _ = Command::new("xdg-open")
         .arg(&url)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+    #[cfg(target_os = "macos")]
+    let _ = Command::new("open")
+        .arg(&url)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+    #[cfg(target_os = "windows")]
+    let _ = Command::new("cmd")
+        .args(["/C", "start", "", &url])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn();

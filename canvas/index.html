@@ -7,8 +7,8 @@
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/app.css">
 </head>
-<body>
-  <div id="app">
+<body>    <div id="app">
+    <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
     <header class="topbar">
       <div class="brand">
         <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
@@ -24,6 +24,9 @@
         <select id="canvasSelect" aria-label="Canvas"></select>
         <button id="newCanvasBtn" class="icon" title="New canvas" aria-label="New canvas">+</button>
       </div>
+
+      <button id="railToggle" class="icon mobile-only" title="Pages and frames" aria-label="Pages and frames">☰</button>
+      <button id="panelToggle" class="icon mobile-only" title="Inspector and tokens" aria-label="Inspector and tokens">⋯</button>
 
       <div class="grow"></div>
 

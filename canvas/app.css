@@ -707,9 +707,36 @@ button:focus-visible { outline: 2px solid var(--op-accent); outline-offset: 2px;
   :root { --panel: 300px; --rail: 200px; }
 }
 
+.mobile-only { display: none; }
+
 @media (max-width: 880px) {
-  .body { grid-template-columns: 1fr; }
-  .rail, .panel { display: none; }
-  .theme-pick, .tag, .presence { display: none; }
-  .stage-hud { left: 20px; }
+  .mobile-only { display: inline-flex; }
+  .topbar { gap: 6px; padding: 0 8px; }
+  .canvas-picker { margin-left: 4px; }
+  .theme-pick, .tag, .presence, .zoom { display: none; }
+  .body { grid-template-columns: 1fr; position: relative; }
+  .rail, .panel {
+    position: fixed;
+    top: var(--bar);
+    bottom: 0;
+    width: 86vw;
+    max-width: 340px;
+    z-index: 45;
+    display: flex !important;
+    transform: translateX(-102%);
+    transition: transform .18s ease;
+    box-shadow: 0 0 24px rgba(0,0,0,.35);
+  }
+  .panel { left: auto; right: 0; transform: translateX(102%); }
+  body.rail-open .rail { transform: translateX(0); }
+  body.panel-open .panel { transform: translateX(0); }
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    top: var(--bar);
+    background: rgba(0,0,0,.45);
+    z-index: 40;
+  }
+  .drawer-backdrop[hidden] { display: none; }
+  .stage-hud { left: 12px; right: 12px; font-size: 10px; }
 }

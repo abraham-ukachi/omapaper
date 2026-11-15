@@ -62,6 +62,32 @@ impl Store {
 
     /// `~/.local/share/omapaper/omapaper.db`, honouring `$XDG_DATA_HOME`.
     pub fn default_path() -> PathBuf {
+        if let Ok(data) = std::env::var("OMAPPAPER_DATA_DIR") {
+            // Allow callers to point at a directory; a trailing .db file is kept as-is.
+            let path = PathBuf::from(data);
+            if path.extension().map(|e| e == "db").unwrap_or(false) {
+                return path;
+            }
+            return path.join("omapaper.db");
+        }
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(base) = std::env::var_os("LOCALAPPDATA")
+                .or_else(|| std::env::var_os("APPDATA"))
+            {
+                return PathBuf::from(base).join("omapaper").join("omapaper.db");
+            }
+        }
+        #[cfg(target_os = "macos")]
+        {
+            if let Some(home) = std::env::var_os("HOME") {
+                return PathBuf::from(home)
+                    .join("Library")
+                    .join("Application Support")
+                    .join("omapaper")
+                    .join("omapaper.db");
+            }
+        }
         if let Ok(data) = std::env::var("XDG_DATA_HOME") {
             return PathBuf::from(data).join("omapaper/omapaper.db");
         }

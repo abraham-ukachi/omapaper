@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.4.0-beta.1] - 2026-11-16
+
+### Added
+- :globe_with_meridians: Cross-platform data directories (Windows/macOS/Linux) and URL opening.
+- :iphone: Mobile-friendly canvas viewer with drawer navigation for pages/frames/inspector.
+- :white_check_mark: CI build matrix across Ubuntu, macOS and Windows.
+
+### Notes
+- Beta release. Mobile editing remains desktop-first.
+
 ## [0.3.2-beta.1] - 2026-11-15
 
 ### Added

@@ -1440,6 +1440,19 @@ function bind() {
   $("#renameCanvas").onclick = renameCanvas;
   $("#newFrameBtn").onclick = newFrame;
   $("#duplicateCanvasBtn").onclick = duplicateCanvas;
+  const closeDrawers = () => { document.body.classList.remove("rail-open", "panel-open"); const b = $("#drawerBackdrop"); if (b) b.hidden = true; };
+  const openDrawer = (name) => {
+    closeDrawers();
+    document.body.classList.add(name === "rail" ? "rail-open" : "panel-open");
+    const b = $("#drawerBackdrop"); if (b) b.hidden = false;
+  };
+  const railToggle = $("#railToggle");
+  if (railToggle) railToggle.onclick = () => document.body.classList.contains("rail-open") ? closeDrawers() : openDrawer("rail");
+  const panelToggle = $("#panelToggle");
+  if (panelToggle) panelToggle.onclick = () => document.body.classList.contains("panel-open") ? closeDrawers() : openDrawer("panel");
+  const backdrop = $("#drawerBackdrop");
+  if (backdrop) backdrop.onclick = closeDrawers;
+  $("#stageWrap").addEventListener("click", closeDrawers);
   $("#newPageBtn").onclick = newPage;
   $("#importFrameBtn").onclick = () => $("#importFile").click();
   $("#frameSearch").oninput = (event) => {
@@ -1589,6 +1602,9 @@ function bind() {
     if (tag) tag.textContent = "read-only";
   }
 
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".nav-item, .page-nav button")) closeDrawers();
+  });
   document.addEventListener("mousemove", applyResize);
   document.addEventListener("mouseup", finishResize);
 
