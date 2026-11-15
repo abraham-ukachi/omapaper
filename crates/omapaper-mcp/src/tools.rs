@@ -128,6 +128,21 @@ pub fn definitions() -> Vec<Value> {
             &[],
         ),
         tool(
+            "import_html",
+            "Import HTML",
+            "Create a frame from a raw HTML document or a local HTML file (e.g. an export from Paper).",
+            json!({
+                "canvasId": {"type": "string"},
+                "pageId": {"type": "string"},
+                "name": {"type": "string"},
+                "width": {"type": "number"},
+                "height": {"type": "number"},
+                "html": {"type": "string", "description": "Raw HTML document."},
+                "path": {"type": "string", "description": "Path to a local .html file."}
+            }),
+            &[],
+        ),
+        tool(
             "get_frame",
             "Get frame",
             "One frame with its HTML, size, approval, element count and the number of saved versions.",
@@ -291,6 +306,7 @@ pub fn definitions() -> Vec<Value> {
             json!({
                 "frameId": {"type": "string"},
                 "nodeId": {"type": "string"},
+                "nodeIds": {"type": "array", "items": {"type": "string"}, "description": "Apply to these data-op-id values."},
                 "selector": {"type": "string"},
                 "styles": {"type": "object", "additionalProperties": {"type": ["string", "number"]}},
                 "index": {"type": "integer"},
@@ -305,6 +321,7 @@ pub fn definitions() -> Vec<Value> {
             json!({
                 "frameId": {"type": "string"},
                 "nodeId": {"type": "string"},
+                "nodeIds": {"type": "array", "items": {"type": "string"}, "description": "Apply to these data-op-id values."},
                 "selector": {"type": "string"},
                 "text": {"type": "string"},
                 "index": {"type": "integer"},
@@ -319,6 +336,7 @@ pub fn definitions() -> Vec<Value> {
             json!({
                 "frameId": {"type": "string"},
                 "nodeId": {"type": "string"},
+                "nodeIds": {"type": "array", "items": {"type": "string"}, "description": "Apply to these data-op-id values."},
                 "selector": {"type": "string"},
                 "name": {"type": "string"},
                 "index": {"type": "integer"},
@@ -333,6 +351,7 @@ pub fn definitions() -> Vec<Value> {
             json!({
                 "frameId": {"type": "string"},
                 "nodeId": {"type": "string"},
+                "nodeIds": {"type": "array", "items": {"type": "string"}, "description": "Apply to these data-op-id values."},
                 "selector": {"type": "string"},
                 "index": {"type": "integer"},
                 "all": {"type": "boolean", "description": "Apply to every match instead of one."}
@@ -693,6 +712,39 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             host.emit(&canvas.id, json!({"type": "frame.created", "frame": frame}));
             Ok(text(json!({"frame": frame})))
         }
+        "import_html" => {
+            let canvas = ctx.canvas()?;
+            let page_id = match ctx.opt_str("pageId") {
+                Some(page_id) => {
+                    if canvas.page(&page_id).is_none() {
+                        return Err(format!("no page `{page_id}`"));
+                    }
+                    page_id
+                }
+                None => canvas.pages[0].id.clone(),
+            };
+            let html = if let Some(path) = ctx.opt_str("path") {
+                std::fs::read_to_string(&path).map_err(|e| format!("cannot read `{path}`: {e}"))?
+            } else {
+                ctx.req_str("html")?
+            };
+            let count = host.store.frames(&canvas.id).map_err(err)?.len() + 1;
+            let name = ctx
+                .opt_str("name")
+                .unwrap_or_else(|| format!("Imported Frame {count}"));
+            let mut frame = Frame::new(&canvas.id, &page_id, name);
+            if let Some(width) = ctx.opt_f64("width") {
+                frame.width = width;
+            }
+            if let Some(height) = ctx.opt_f64("height") {
+                frame.height = height;
+            }
+            frame.html = html;
+            frame.revision = 1;
+            host.store.insert_frame(&frame).map_err(err)?;
+            host.emit(&canvas.id, json!({"type": "frame.created", "frame": frame}));
+            Ok(text(json!({"frame": frame, "elements": html::element_count(&frame.html)})))
+        }
         "get_frame" => {
             let frame = ctx.frame()?;
             let versions = host.store.versions(&frame.id).map_err(err)?.len();
@@ -1020,12 +1072,28 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
         "update_styles" => {
             let mut frame = ctx.frame()?;
             ensure_unlocked(&frame)?;
-            let selector = ctx.selector()?;
             let styles = ctx.style_map("styles")?;
             let index = ctx.opt_u64("index").map(|i| i as usize);
             let all = ctx.opt_bool("all").unwrap_or(false);
-            let (updated, count) = html::update_styles(&frame.html, &selector, &styles, index, all)
-                .map_err(|e| e.to_string())?;
+            let (updated, count) = if let Some(ids) = ctx.opt_str_vec("nodeIds") {
+                if ids.is_empty() {
+                    return Err("`nodeIds` must not be empty".into());
+                }
+                let mut html = frame.html.clone();
+                let mut count = 0usize;
+                for id in ids {
+                    let selector = html::selector_for_id(&id);
+                    let (u, c) = html::update_styles(&html, &selector, &styles, None, false)
+                        .map_err(|e| e.to_string())?;
+                    html = u;
+                    count += c;
+                }
+                (html, count)
+            } else {
+                let selector = ctx.selector()?;
+                html::update_styles(&frame.html, &selector, &styles, index, all)
+                    .map_err(|e| e.to_string())?
+            };
             host.store
                 .push_version(&frame, Some("before update_styles"), 30)
                 .map_err(err)?;
@@ -1038,12 +1106,24 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
         "set_text_content" => {
             let mut frame = ctx.frame()?;
             ensure_unlocked(&frame)?;
-            let selector = ctx.selector()?;
             let body = ctx.req_str("text")?;
             let index = ctx.opt_u64("index").map(|i| i as usize);
             let all = ctx.opt_bool("all").unwrap_or(false);
-            let updated =
-                html::set_text(&frame.html, &selector, &body, index, all).map_err(|e| e.to_string())?;
+            let updated = if let Some(ids) = ctx.opt_str_vec("nodeIds") {
+                if ids.is_empty() {
+                    return Err("`nodeIds` must not be empty".into());
+                }
+                let mut html = frame.html.clone();
+                for id in ids {
+                    let selector = html::selector_for_id(&id);
+                    html = html::set_text(&html, &selector, &body, None, false)
+                        .map_err(|e| e.to_string())?;
+                }
+                html
+            } else {
+                let selector = ctx.selector()?;
+                html::set_text(&frame.html, &selector, &body, index, all).map_err(|e| e.to_string())?
+            };
             host.store
                 .push_version(&frame, Some("before set_text_content"), 30)
                 .map_err(err)?;
@@ -1056,12 +1136,24 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
         "rename_nodes" => {
             let mut frame = ctx.frame()?;
             ensure_unlocked(&frame)?;
-            let selector = ctx.selector()?;
             let name = ctx.req_str("name")?;
             let index = ctx.opt_u64("index").map(|i| i as usize);
             let all = ctx.opt_bool("all").unwrap_or(false);
-            let updated =
-                html::rename(&frame.html, &selector, &name, index, all).map_err(|e| e.to_string())?;
+            let updated = if let Some(ids) = ctx.opt_str_vec("nodeIds") {
+                if ids.is_empty() {
+                    return Err("`nodeIds` must not be empty".into());
+                }
+                let mut html = frame.html.clone();
+                for id in ids {
+                    let selector = html::selector_for_id(&id);
+                    html = html::rename(&html, &selector, &name, None, false)
+                        .map_err(|e| e.to_string())?;
+                }
+                html
+            } else {
+                let selector = ctx.selector()?;
+                html::rename(&frame.html, &selector, &name, index, all).map_err(|e| e.to_string())?
+            };
             frame.html = updated;
             frame.revision += 1;
             host.save_frame(&frame)?;
@@ -1070,10 +1162,23 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
         "delete_nodes" => {
             let mut frame = ctx.frame()?;
             ensure_unlocked(&frame)?;
-            let selector = ctx.selector()?;
             let index = ctx.opt_u64("index").map(|i| i as usize);
             let all = ctx.opt_bool("all").unwrap_or(false);
-            let updated = html::delete(&frame.html, &selector, index, all).map_err(|e| e.to_string())?;
+            let updated = if let Some(ids) = ctx.opt_str_vec("nodeIds") {
+                if ids.is_empty() {
+                    return Err("`nodeIds` must not be empty".into());
+                }
+                let mut html = frame.html.clone();
+                for id in ids {
+                    let selector = html::selector_for_id(&id);
+                    html = html::delete(&html, &selector, None, false)
+                        .map_err(|e| e.to_string())?;
+                }
+                html
+            } else {
+                let selector = ctx.selector()?;
+                html::delete(&frame.html, &selector, index, all).map_err(|e| e.to_string())?
+            };
             host.store
                 .push_version(&frame, Some("before delete_nodes"), 30)
                 .map_err(err)?;
@@ -1081,7 +1186,7 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             frame.revision += 1;
             frame.approval = Approval::Draft;
             host.save_frame(&frame)?;
-            Ok(text(json!({"frameId": frame.id, "deleted": selector})))
+            Ok(text(json!({"frameId": frame.id, "deleted": "nodes"})))
         }
         "get_computed_styles" => {
             let frame = ctx.frame()?;
@@ -1301,6 +1406,20 @@ impl Ctx<'_> {
             .filter(|s| !s.is_empty())
             .map(str::to_string)
             .ok_or_else(|| format!("`{key}` is required"))
+    }
+
+    fn opt_str_vec(&self, key: &str) -> Option<Vec<String>> {
+        self.args
+            .get(key)
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            })
     }
 
     fn opt_str(&self, key: &str) -> Option<String> {

@@ -82,7 +82,7 @@ The canvas is a single page served by the daemon at `http://127.0.0.1:4310/`:
 |:------|:------------|:--------|
 | Language | Rust | 1.99 (edition 2021) |
 | Engine | `omapaper-core` | model, theme, store, tokens, HTML, render, guide |
-| MCP | `omapaper-mcp` | 45 tools, JSON-RPC over stdio + HTTP |
+| MCP | `omapaper-mcp` | 46 tools, JSON-RPC over stdio + HTTP |
 | Daemon | `omapaperd` | axum 0.7, tokio, REST + WebSocket |
 | Desktop | `omapaper` (cockpit) | Slint 1.x |
 | Canvas window | `omapaper-canvas` | GTK3 + WebKit2GTK 4.1 |
@@ -170,7 +170,7 @@ MCP client config (stdio):
 }
 ```
 
-MCP over HTTP: `http://127.0.0.1:4310/mcp` (JSON-RPC). See [`docs/mcp.md`](./docs/mcp.md) for all 45 tools.
+MCP over HTTP: `http://127.0.0.1:4310/mcp` (JSON-RPC). See [`docs/mcp.md`](./docs/mcp.md) for all 46 tools.
 
 
 ## Roadmap 🗺️

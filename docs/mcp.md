@@ -1,6 +1,6 @@
 # OmaPaper MCP tools
 
-OmaPaper exposes **45 tools** over MCP, both as a stdio server (`omapaper-mcp`) and over HTTP at `http://127.0.0.1:4310/mcp` (JSON-RPC). The daemon must be running.
+OmaPaper exposes **46 tools** over MCP, both as a stdio server (`omapaper-mcp`) and over HTTP at `http://127.0.0.1:4310/mcp` (JSON-RPC). The daemon must be running.
 
 Call `get_guide` once per session before any other tool. Topics: `omapaper-instructions` (default), `workflow`, `html`, `tokens`, `prototypes`, `comments`.
 
@@ -29,6 +29,7 @@ Call `get_guide` once per session before any other tool. Topics: `omapaper-instr
 | Tool | Purpose |
 |:-----|:--------|
 | `create_frame` | New HTML artboard on a page (phones 390×844, desktop 1440×900, cards 480×600). |
+| `import_html` | Create a frame from a raw HTML document or a local HTML file (e.g. an export from Paper). |
 | `get_frame` | One frame with its HTML, size, approval, element count and saved-version count. |
 | `set_frame_html` | Replace a frame's whole document. Files the previous design as a version first. |
 | `append_frame_html` | Stream a design: `start=true` begins a fresh document, each call appends a section, `done=true` finalises. |

@@ -35,6 +35,7 @@ const state = {
   viewTheme: store.get("theme", ""),
   selectedFrameId: store.get("frame", ""),
   selectedNode: null,
+  selectedNodes: [],
   tab: "inspect",
   peerId: store.get("peer", "") || crypto.randomUUID(),
   name: store.get("name", "You"),
@@ -370,6 +371,7 @@ function escapeAttr(value) {
 function selectFrame(id) {
   state.selectedFrameId = id;
   state.selectedNode = null;
+  state.selectedNodes = [];
   store.set("frame", id);
   for (const [frameId, element] of frameElements) {
     element.classList.toggle("selected", frameId === id);
@@ -399,13 +401,26 @@ function wireFrame(frameId) {
     }
     const target = event.target.closest("[data-op-id]") || event.target;
     if (!(target instanceof Element)) return;
-    state.selectedNode = {
+    const node = {
       id: target.getAttribute("data-op-id") || "",
       tag: target.tagName.toLowerCase(),
       label: target.getAttribute("data-name") || target.getAttribute("data-op-id") || target.tagName.toLowerCase(),
+      frameId,
     };
+    if (event.shiftKey) {
+      const existing = state.selectedNodes.findIndex((entry) => entry.id === node.id && entry.frameId === frameId);
+      if (existing >= 0) state.selectedNodes.splice(existing, 1);
+      else state.selectedNodes.push(node);
+    } else {
+      state.selectedNodes = [node];
+    }
+    state.selectedNode = state.selectedNodes[state.selectedNodes.length - 1] || null;
     for (const marked of doc.querySelectorAll("[data-op-selected]")) marked.removeAttribute("data-op-selected");
-    target.setAttribute("data-op-selected", "");
+    for (const selected of state.selectedNodes) {
+      const marked = doc.querySelector(`[data-op-id="${CSS.escape(selected.id)}"]`);
+      if (marked) marked.setAttribute("data-op-selected", "");
+    }
+    if (!state.selectedNodes.length) target.setAttribute("data-op-selected", "");
     selectFrameNode(frameId);
   });
   doc.addEventListener("mousemove", (event) => {
@@ -489,9 +504,12 @@ function renderPanel() {
     if (document.activeElement !== editor) editor.value = frame.html || "";
     if (!frame.html) loadFrameHtml(frame);
     const node = state.selectedNode;
-    $("#selectionInfo").innerHTML = node
-      ? `element <b>${escapeHtml(node.label)}</b> · ${escapeHtml(node.tag)}${node.id ? ` · data-op-id <b>${escapeHtml(node.id)}</b>` : ""}`
-      : `frame <b>${escapeHtml(frame.name)}</b> · ${frame.elements} elements · revision ${frame.revision}`;
+    const selectedCount = state.selectedNodes.length;
+    $("#selectionInfo").innerHTML = selectedCount > 1
+      ? `${selectedCount} elements selected`
+      : node
+        ? `element <b>${escapeHtml(node.label)}</b> · ${escapeHtml(node.tag)}${node.id ? ` · data-op-id <b>${escapeHtml(node.id)}</b>` : ""}`
+        : `frame <b>${escapeHtml(frame.name)}</b> · ${frame.elements} elements · revision ${frame.revision}`;
     $("#exportHtml").href = `/api/frames/${frame.id}/export?format=html`;
     $("#exportPng").href = `/api/frames/${frame.id}/export?format=png`;
     $("#exportPdf").href = `/api/frames/${frame.id}/export?format=pdf`;
