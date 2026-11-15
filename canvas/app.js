@@ -36,6 +36,7 @@ const state = {
   selectedFrameId: store.get("frame", ""),
   selectedNode: null,
   selectedNodes: [],
+  frameFilter: "",
   tab: "dashboard",
   peerId: store.get("peer", "") || crypto.randomUUID(),
   name: store.get("name", "You"),
@@ -239,7 +240,14 @@ function renderRail() {
 
   const nav = $("#frameNav");
   nav.innerHTML = "";
-  for (const frame of state.frames) {
+  const filter = state.frameFilter || "";
+  const frames = filter
+    ? state.frames.filter((frame) => (frame.name || "").toLowerCase().includes(filter))
+    : state.frames;
+  $("#frameCount").textContent = filter && frames.length !== state.frames.length
+    ? `${frames.length}/${state.frames.length}`
+    : String(state.frames.length);
+  for (const frame of frames) {
     const button = document.createElement("button");
     button.className = `nav-item${frame.id === state.selectedFrameId ? " active" : ""}`;
     button.innerHTML = `<span class="glyph">▢</span><span class="label"></span><span class="meta"></span>`;
@@ -1418,6 +1426,10 @@ function bind() {
   $("#newFrameBtn").onclick = newFrame;
   $("#newPageBtn").onclick = newPage;
   $("#importFrameBtn").onclick = () => $("#importFile").click();
+  $("#frameSearch").oninput = (event) => {
+    state.frameFilter = event.target.value.trim().toLowerCase();
+    renderRail();
+  };
   $("#importFile").onchange = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
