@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.1.2] - 2026-11-15
+
+### Added
+- :sparkles: Shift-click multi-select of nodes in the canvas with a selection count in the inspector.
+- :sparkles: `nodeIds` parameter on node tools to edit several nodes in one call.
+- :sparkles: `import_html` MCP tool to create a frame from raw HTML or a local HTML file.
+
+### Notes
+- Patch release on top of 0.1.1; no breaking API changes.
+
 ## [0.1.1] - 2026-11-15
 
 ### Added
