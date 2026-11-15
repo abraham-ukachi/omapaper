@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.1.1] - 2026-11-15
+
+### Added
+- :sparkles: Drag-to-resize handles on canvas frames, persisted through the frame API.
+- :sparkles: Per-frame undo/redo stacks with inspector buttons and Ctrl+Z / Ctrl+Shift+Z shortcuts.
+- :sparkles: `all` flag on `update_styles`, `set_text_content`, `rename_nodes` and `delete_nodes` to edit every matching element at once.
+
+### Notes
+- Patch release on top of 0.1.0; no breaking API changes.
+
 ## [0.1.0] - 2026-11-15
 
 ### Added
