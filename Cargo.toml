@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/omapaper-core",
+  "crates/omapaper-mcp",
+  "crates/omapaperd",
+  "app",
+  "canvas-viewer",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Abraham Ukachi <abraham.ukachi@laplateforme.io>"]
+license = "MIT"
+repository = "https://github.com/abraham-ukachi/omapaper"
+homepage = "https://github.com/abraham-ukachi/omapaper"
+description = "A dead-simple, 100% free design canvas for humans and AI agents, with Omarchy's look & feel."
+
+[workspace.dependencies]
+omapaper-core = { path = "crates/omapaper-core" }
+omapaper-mcp = { path = "crates/omapaper-mcp" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+html5ever = "0.27"
+markup5ever_rcdom = "0.3"
+toml = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }
+axum = { version = "0.8", features = ["ws", "macros"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+futures-util = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+debug = 1

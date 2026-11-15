@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=OmaPaper
+GenericName=Design Canvas
+Comment=A free design canvas for humans and AI agents
+Exec=omapaper %U
+TryExec=omapaper
+Icon=omapaper
+Terminal=false
+Categories=Graphics;Development;
+Keywords=design;canvas;ui;ux;mcp;agent;ai;prototype;figma;
+StartupNotify=true
+StartupWMClass=omapaper

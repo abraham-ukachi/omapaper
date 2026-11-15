@@ -1,0 +1,12 @@
+[package]
+name = "omapaper-canvas"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gtk = { version = "0.18", package = "gtk", features = ["v3_24"] }
+webkit2gtk = "2.0"

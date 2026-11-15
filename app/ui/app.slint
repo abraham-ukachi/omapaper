@@ -1,0 +1,476 @@
+//! OmaPaper's cockpit: a small, Omarchy-coloured launcher that starts the
+//! daemon and opens canvases. The canvas itself lives in the browser/WebKit.
+//!
+//! Every colour is a role in `Palette`, filled from the live Omarchy theme at
+//! runtime — the same three-colour system `omapaper-core::theme` documents.
+
+export global Palette {
+    in-out property <color> bg: #1a1b26;
+    in-out property <color> fg: #a9b1d6;
+    in-out property <color> accent: #7aa2f7;
+    in-out property <color> surface: #232432;
+    in-out property <color> hover: #2a2c3c;
+    in-out property <color> line: #2e3044;
+    in-out property <color> raised: #313348;
+    in-out property <color> muted: #6a7088;
+    in-out property <color> ink-on-accent: #1a1b26;
+    in-out property <string> theme-name: "Tokyo Night";
+    in-out property <bool> dark: true;
+}
+
+export struct CanvasItem {
+    id: string,
+    name: string,
+    meta: string,
+}
+
+component BrandMark inherits Rectangle {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: Palette.accent;
+    Text {
+        text: "O";
+        color: Palette.ink-on-accent;
+        font-size: 20px;
+        font-weight: 800;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        width: parent.width;
+        height: parent.height;
+    }
+    // The "paper" fold: a lighter corner cut from the mark.
+    Rectangle {
+        x: parent.width - 12px;
+        y: 0px;
+        width: 12px;
+        height: 12px;
+        border-bottom-left-radius: 5px;
+        background: Palette.bg;
+        opacity: 0.9;
+    }
+}
+
+component ActionButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> primary: false;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 32px;
+    width: Math.max(84px, label-text.preferred-width + 26px);
+    border-radius: 8px;
+    background: !self.enabled
+        ? Palette.surface
+        : self.primary
+            ? (ta.has-hover ? Palette.accent.mix(Palette.fg, 0.12) : Palette.accent)
+            : (ta.has-hover ? Palette.hover : Palette.surface);
+    border-width: self.primary ? 0px : 1px;
+    border-color: Palette.line;
+    opacity: self.enabled ? 1.0 : 0.5;
+
+    label-text := Text {
+        text: root.label;
+        color: root.primary ? Palette.ink-on-accent : Palette.fg;
+        font-size: 13px;
+        font-weight: root.primary ? 600 : 500;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component CanvasRow inherits Rectangle {
+    in property <string> name;
+    in property <string> meta;
+    in property <bool> selected: false;
+    callback select();
+    height: 58px;
+    border-radius: 9px;
+    background: self.selected ? Palette.raised : (ta.has-hover ? Palette.hover : Palette.surface);
+    border-width: 1px;
+    border-color: self.selected ? Palette.accent.transparentize(0.45) : Palette.line;
+
+    VerticalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 9px;
+        padding-bottom: 9px;
+        spacing: 2px;
+        alignment: start;
+        Text {
+            text: root.name;
+            color: Palette.fg;
+            font-size: 14px;
+            font-weight: 600;
+            overflow: elide;
+        }
+        Text {
+            text: root.meta;
+            color: Palette.muted;
+            font-size: 11px;
+            overflow: elide;
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.select(); }
+    }
+}
+
+component Chip inherits Rectangle {
+    in property <string> label;
+    height: 26px;
+    width: chip-text.preferred-width + 22px;
+    border-radius: 13px;
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: Palette.line;
+    chip-text := Text {
+        text: root.label;
+        color: Palette.muted;
+        font-size: 11px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+    }
+}
+
+component StepRow inherits HorizontalLayout {
+    in property <string> number;
+    in property <string> heading;
+    in property <string> detail;
+    spacing: 10px;
+    alignment: start;
+
+    Rectangle {
+        width: 22px;
+        height: 22px;
+        border-radius: 11px;
+        background: Palette.bg;
+        border-width: 1px;
+        border-color: Palette.line;
+        Text {
+            text: root.number;
+            color: Palette.accent;
+            font-size: 11px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            width: parent.width;
+            height: parent.height;
+        }
+    }
+    VerticalLayout {
+        spacing: 1px;
+        Text { text: root.heading; color: Palette.fg; font-size: 13px; font-weight: 600; }
+        Text { text: root.detail; color: Palette.muted; font-size: 11px; }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "OmaPaper";
+    default-font-family: "Inter";
+    background: Palette.bg;
+    preferred-width: 940px;
+    preferred-height: 640px;
+    min-width: 720px;
+    min-height: 520px;
+
+    in property <[CanvasItem]> canvases;
+    in-out property <int> selected: -1;
+    in-out property <string> draft: "";
+    in property <bool> online: false;
+    in property <string> status: "starting the daemon…";
+    in property <string> endpoint: "http://127.0.0.1:4310";
+    in property <string> version: "";
+
+    callback refresh();
+    callback create(string);
+    callback open-canvas(string);
+    callback open-browser();
+
+    VerticalLayout {
+        padding: 18px;
+        spacing: 14px;
+
+        // ── header ────────────────────────────────────────────────────────
+        HorizontalLayout {
+            height: 44px;
+            spacing: 12px;
+            alignment: start;
+
+            BrandMark { }
+
+            VerticalLayout {
+                spacing: 1px;
+                alignment: center;
+                Text {
+                    text: "OmaPaper";
+                    color: Palette.fg;
+                    font-size: 19px;
+                    font-weight: 700;
+                }
+                Text {
+                    text: "design canvas · " + root.status;
+                    color: Palette.muted;
+                    font-size: 11px;
+                }
+            }
+
+            Rectangle { }
+
+            Chip { label: Palette.theme-name; }
+            Chip { label: root.endpoint; }
+            ActionButton {
+                label: "Open in browser";
+                clicked => { root.open-browser(); }
+            }
+        }
+
+        Rectangle { height: 1px; background: Palette.line; }
+
+        // ── body ──────────────────────────────────────────────────────────
+        HorizontalLayout {
+            spacing: 14px;
+
+            // canvases
+            VerticalLayout {
+                width: 340px;
+                spacing: 10px;
+
+                HorizontalLayout {
+                    height: 22px;
+                    alignment: start;
+                    spacing: 8px;
+                    Text {
+                        text: "Canvases";
+                        color: Palette.fg;
+                        font-size: 12px;
+                        font-weight: 700;
+                        letter-spacing: 1px;
+                    }
+                    Text {
+                        text: root.canvases.length;
+                        color: Palette.muted;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                    }
+                    Rectangle { }
+                    Text {
+                        text: "refresh";
+                        color: refresh-area.has-hover ? Palette.fg : Palette.muted;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                    }
+                    refresh-area := TouchArea {
+                        width: 52px;
+                        height: 22px;
+                        mouse-cursor: pointer;
+                        clicked => { root.refresh(); }
+                    }
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    border-radius: 10px;
+                    background: Palette.bg;
+                    border-width: 1px;
+                    border-color: Palette.line;
+
+                    VerticalLayout {
+                        visible: root.canvases.length == 0;
+                        alignment: center;
+                        spacing: 6px;
+                        padding: 20px;
+                        Text {
+                            text: root.online ? "No canvases yet" : "Waiting for the daemon";
+                            color: Palette.fg;
+                            font-size: 13px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: root.online
+                                ? "Name one below, or ask your agent to create_canvas."
+                                : "The cockpit starts it on 127.0.0.1 for you.";
+                            color: Palette.muted;
+                            font-size: 11px;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    Flickable {
+                        visible: root.canvases.length > 0;
+                        content-width: self.width;
+                        content-height: list.preferred-height;
+                        list := VerticalLayout {
+                            padding: 7px;
+                            spacing: 6px;
+                            for canvas[i] in root.canvases : CanvasRow {
+                                name: canvas.name;
+                                meta: canvas.meta;
+                                selected: i == root.selected;
+                                select => {
+                                    root.selected = i;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    height: 34px;
+                    spacing: 8px;
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        height: 34px;
+                        border-radius: 8px;
+                        background: Palette.surface;
+                        border-width: 1px;
+                        border-color: draft-input.has-focus ? Palette.accent : Palette.line;
+
+                        Text {
+                            visible: root.draft == "";
+                            x: 12px;
+                            width: parent.width - 24px;
+                            height: parent.height;
+                            vertical-alignment: center;
+                            text: "New canvas name…";
+                            color: Palette.muted;
+                            font-size: 13px;
+                        }
+
+                        draft-input := TextInput {
+                            x: 10px;
+                            width: parent.width - 20px;
+                            height: parent.height;
+                            vertical-alignment: center;
+                            single-line: true;
+                            text <=> root.draft;
+                            color: Palette.fg;
+                            font-size: 13px;
+                            accepted => {
+                                if (root.draft != "" && root.online) {
+                                    root.create(root.draft);
+                                    root.draft = "";
+                                }
+                            }
+                        }
+                    }
+                    ActionButton {
+                        label: "Create";
+                        primary: true;
+                        enabled: root.draft != "" && root.online;
+                        clicked => {
+                            root.create(root.draft);
+                            root.draft = "";
+                        }
+                    }
+                }
+            }
+
+            // details
+            Rectangle {
+                horizontal-stretch: 1;
+                border-radius: 10px;
+                background: Palette.surface;
+                border-width: 1px;
+                border-color: Palette.line;
+
+                VerticalLayout {
+                    padding: 18px;
+                    spacing: 14px;
+
+                    Text {
+                        text: root.selected >= 0 && root.selected < root.canvases.length
+                            ? root.canvases[root.selected].name
+                            : "A canvas for humans and agents";
+                        color: Palette.fg;
+                        font-size: 22px;
+                        font-weight: 700;
+                        wrap: word-wrap;
+                    }
+
+                    Text {
+                        text: root.selected >= 0 && root.selected < root.canvases.length
+                            ? root.canvases[root.selected].meta
+                            : "Every page is real HTML. Every frame is a document your agent can read, restyle and screenshot over MCP — no subscription, no cloud, no seats.";
+                        color: Palette.muted;
+                        font-size: 12px;
+                        wrap: word-wrap;
+                    }
+
+                    Rectangle { height: 1px; background: Palette.line; }
+
+                    Text {
+                        text: "How it fits together";
+                        color: Palette.fg;
+                        font-size: 12px;
+                        font-weight: 700;
+                        letter-spacing: 1px;
+                    }
+
+                    VerticalLayout {
+                        spacing: 8px;
+                        StepRow {
+                            number: "1";
+                            heading: "Canvas";
+                            detail: "A project: pages, frames, tokens, comments.";
+                        }
+                        StepRow {
+                            number: "2";
+                            heading: "Pages";
+                            detail: "Sections of the design, like a Figma page.";
+                        }
+                        StepRow {
+                            number: "3";
+                            heading: "Frames";
+                            detail: "Each frame is a complete HTML document.";
+                        }
+                    }
+
+                    Rectangle { vertical-stretch: 1; }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        ActionButton {
+                            label: "Open canvas";
+                            primary: true;
+                            enabled: root.selected >= 0 && root.selected < root.canvases.length;
+                            clicked => {
+                                if (root.selected >= 0 && root.selected < root.canvases.length) {
+                                    root.open-canvas(root.canvases[root.selected].id);
+                                }
+                            }
+                        }
+                        ActionButton {
+                            label: "Open in browser";
+                            clicked => { root.open-browser(); }
+                        }
+                    }
+
+                    Text {
+                        text: root.version == "" ? "" : "omapaperd " + root.version + " · MCP over stdio and HTTP";
+                        color: Palette.muted;
+                        font-size: 10px;
+                    }
+                }
+            }
+        }
+    }
+}

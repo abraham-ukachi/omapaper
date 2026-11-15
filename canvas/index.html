@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OmaPaper</title>
+  <link rel="stylesheet" href="/theme.css">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+          <path class="tile" d="M9 2.5h13L29 9.5V23a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6V8.5a6 6 0 0 1 6-6Z"></path>
+          <path class="fold" d="M22 2.5 29 9.5h-7Z"></path>
+          <circle class="ink" cx="16" cy="16.8" r="5.6"></circle>
+        </svg>
+        <span class="name">OmaPaper</span>
+        <span class="tag">local · free</span>
+      </div>
+
+      <div class="canvas-picker">
+        <select id="canvasSelect" aria-label="Canvas"></select>
+        <button id="newCanvasBtn" class="icon" title="New canvas" aria-label="New canvas">+</button>
+      </div>
+
+      <div class="grow"></div>
+
+      <div id="presence" class="presence" aria-label="People here"></div>
+
+      <label class="theme-pick">
+        <span>theme</span>
+        <select id="themeSelect" aria-label="Preview theme"></select>
+      </label>
+
+      <div class="zoom" role="group" aria-label="Zoom">
+        <button id="zoomOut" class="icon" title="Zoom out (−)">−</button>
+        <button id="zoomLabel" class="zoom-label" title="Reset zoom">100%</button>
+        <button id="zoomIn" class="icon" title="Zoom in (+)">+</button>
+      </div>
+
+      <button id="playBtn" class="ghost" title="Play prototype (P)">▶ Play</button>
+      <button id="newFrameBtn" class="primary" title="New frame (N)">+ Frame</button>
+    </header>
+
+    <div class="body">
+      <aside class="rail">
+        <div class="rail-head">
+          <span id="canvasName">…</span>
+          <button id="renameCanvas" class="icon" title="Rename canvas" aria-label="Rename canvas">✎</button>
+        </div>
+        <nav id="pageNav" class="page-nav" aria-label="Pages"></nav>
+
+        <div class="rail-label">frames <span id="frameCount"></span></div>
+        <nav id="frameNav" class="frame-nav" aria-label="Frames"></nav>
+
+        <footer class="rail-foot">
+          <span id="daemonInfo">connecting…</span>
+          <a href="/health" target="_blank" rel="noreferrer">health</a>
+        </footer>
+      </aside>
+
+      <main id="stageWrap" class="stage-wrap">
+        <div id="stage" class="stage"></div>
+        <div id="empty" class="empty" hidden>
+          <p class="kicker">empty canvas</p>
+          <h1>Nothing here yet.</h1>
+          <p class="muted">Press <kbd>N</kbd> to add a frame, or ask an agent to design one. It appears here as it is written.</p>
+        </div>
+        <div id="cursorLayer" class="cursors" aria-hidden="true"></div>
+        <div class="stage-hud">
+          <span id="hint">Click a frame to inspect · <kbd>N</kbd> new · <kbd>P</kbd> play · <kbd>0</kbd> reset zoom</span>
+        </div>
+      </main>
+
+      <aside class="panel" aria-label="Inspector">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="inspect" role="tab">Inspect</button>
+          <button class="tab" data-tab="tokens" role="tab">Tokens</button>
+          <button class="tab" data-tab="comments" role="tab">Comments <span id="commentCount" class="count"></span></button>
+        </div>
+
+        <section id="pane-inspect" class="pane">
+          <div id="inspectEmpty" class="pane-empty">
+            <p class="kicker">inspector</p>
+            <p class="muted">Select a frame to see its HTML, size and versions. Click inside the frame to pick an element.</p>
+          </div>
+          <div id="inspectBody" hidden>
+            <div class="field">
+              <label for="frameName">Name</label>
+              <input id="frameName" autocomplete="off">
+            </div>
+            <div class="row">
+              <div class="field"><label for="frameWidth">Width</label><input id="frameWidth" type="number" min="120" step="1"></div>
+              <div class="field"><label for="frameHeight">Height</label><input id="frameHeight" type="number" min="120" step="1"></div>
+            </div>
+            <div class="row">
+              <div class="field"><label for="frameBg">Paper</label><input id="frameBg" placeholder="theme" autocomplete="off"></div>
+              <div class="field"><label for="frameTheme">Mode</label>
+                <select id="frameTheme">
+                  <option value="">theme</option>
+                  <option value="light">light</option>
+                  <option value="dark">dark</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="frameApproval">Approval</label>
+              <select id="frameApproval">
+                <option value="draft">draft</option>
+                <option value="needs_review">needs review</option>
+                <option value="ready_for_dev">ready for dev</option>
+              </select>
+            </div>
+            <div id="selectionInfo" class="selection"></div>
+            <div class="actions">
+              <button id="saveFrame" class="primary small">Save frame</button>
+              <button id="duplicateFrame" class="ghost small">Duplicate</button>
+              <button id="deleteFrame" class="danger small">Delete</button>
+            </div>
+
+            <div class="rail-label">html</div>
+            <textarea id="htmlEditor" spellcheck="false" aria-label="Frame HTML"></textarea>
+            <div class="actions">
+              <button id="saveHtml" class="primary small">Write HTML</button>
+              <span id="htmlStatus" class="muted"></span>
+            </div>
+
+            <div class="rail-label">export</div>
+            <div class="actions">
+              <a id="exportHtml" class="ghost small" download>html</a>
+              <a id="exportPng" class="ghost small" download>png</a>
+              <a id="exportPdf" class="ghost small" download>pdf</a>
+            </div>
+
+            <div class="rail-label">versions</div>
+            <div id="versions" class="versions"></div>
+          </div>
+        </section>
+
+        <section id="pane-tokens" class="pane" hidden>
+          <div class="pane-intro">
+            <p class="kicker">design tokens</p>
+            <p class="muted">One value per theme, exported as CSS custom properties. Change them with an agent, or here, and every frame follows.</p>
+            <div id="tokenThemes" class="chips"></div>
+          </div>
+          <div id="tokenList" class="token-list"></div>
+          <div class="rail-label">css</div>
+          <pre id="tokenCss" class="code"></pre>
+        </section>
+
+        <section id="pane-comments" class="pane" hidden>
+          <div class="pane-intro">
+            <p class="kicker">comments</p>
+            <div id="commentAnchor" class="muted">Select a frame to pin a note.</div>
+            <textarea id="commentBody" placeholder="A note for this frame…" aria-label="Comment"></textarea>
+            <div class="actions">
+              <button id="addComment" class="primary small">Pin comment</button>
+            </div>
+          </div>
+          <div id="commentList" class="comment-list"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <div id="playOverlay" class="play" hidden>
+    <div class="play-bar">
+      <button id="playBack" class="ghost small" title="Back">←</button>
+      <span id="playTitle" class="play-title">prototype</span>
+      <div class="grow"></div>
+      <span class="muted small">click to follow links</span>
+      <button id="playClose" class="ghost small">Close</button>
+    </div>
+    <div class="play-stage"><iframe id="playFrame" title="Prototype"></iframe></div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

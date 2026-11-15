@@ -1,0 +1,46 @@
+# Maintainer: Abraham Ukachi <abraham.ukachi@laplateforme.io>
+pkgname=omapaper-git
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A dead-simple, 100% free design canvas for humans and AI agents, with Omarchy's look & feel"
+arch=(x86_64 aarch64)
+url="https://github.com/abraham-ukachi/omapaper"
+license=(MIT)
+depends=(gtk3 webkit2gtk-4.1)
+makedepends=(cargo rust)
+provides=(omapaper)
+conflicts=(omapaper)
+options=(!lto)
+source=("git+${url}.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd omapaper
+  git describe --long --tags --abbrev=7 2>/dev/null \
+    | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' \
+    || printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd omapaper
+  cargo build --release --locked --workspace
+}
+
+package() {
+  cd omapaper
+  install -Dm755 target/release/omapaperd "$pkgdir/usr/bin/omapaperd"
+  install -Dm755 target/release/omapaper-mcp "$pkgdir/usr/bin/omapaper-mcp"
+  install -Dm755 target/release/omapaper "$pkgdir/usr/bin/omapaper"
+  install -Dm755 target/release/omapaper-canvas "$pkgdir/usr/bin/omapaper-canvas"
+
+  install -Dm644 packaging/omapaper.desktop "$pkgdir/usr/share/applications/omapaper.desktop"
+  install -Dm644 packaging/icons/omapaper.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/omapaper.svg"
+
+  for size in 16 24 32 48 64 128 256 512; do
+    install -Dm644 "packaging/icons/hicolor/${size}x${size}/apps/omapaper.png" \
+      "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/omapaper.png"
+  done
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
