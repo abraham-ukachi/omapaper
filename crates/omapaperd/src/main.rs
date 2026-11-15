@@ -27,7 +27,7 @@ struct Args {
 impl Args {
     fn parse() -> Args {
         let mut args = Args {
-            host: "127.0.0.1".into(),
+            host: std::env::var("OMAPPAPER_HOST").unwrap_or_else(|_| "127.0.0.1".into()),
             port: DEFAULT_PORT,
             data_dir: default_data_dir(),
             db: None,

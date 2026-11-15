@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.3.0-beta.1] - 2026-11-15
+
+### Added
+- :sparkles: Read-only viewer mode via `?readonly=1`, hiding editing controls and the resize handle.
+- :sparkles: `OMAPPAPER_HOST` env support and a Share button that copies the current URL for LAN sharing.
+- :sparkles: Marked v0.2 complete (resize handles, multi-select, undo/redo, HTML import).
+
+### Notes
+- Beta release: core features are still evolving and the app may be buggy.
+
 ## [0.1.2] - 2026-11-15
 
 ### Added

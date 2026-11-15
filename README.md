@@ -176,7 +176,8 @@ MCP over HTTP: `http://127.0.0.1:4310/mcp` (JSON-RPC). See [`docs/mcp.md`](./doc
 ## Roadmap 🗺️
 
 - [x] v0.1 — full local core: daemon, MCP stdio/HTTP, canvases/pages/frames, streaming, tokens, comments, presence, PNG/PDF export, all Omarchy themes, desktop cockpit, launcher icon, docs & CI
-- [ ] v0.2 — richer node editing (drag/resize handles, multi-select, undo/redo history UI), Figma/Paper import
+- [x] v0.2 — richer node editing (drag/resize handles, multi-select, undo/redo history UI), HTML import
+- [ ] v0.3 — team sharing over LAN (read-only viewers, no seats, no billing) — beta
 - [ ] v0.3 — team sharing over LAN (read-only viewers, no seats, no billing)
 - [ ] v0.4 — other OSes and devices (macOS, Windows, mobile viewers)
 - [ ] v1.0 — stable API, plugin system, Omarchy app-store packaging

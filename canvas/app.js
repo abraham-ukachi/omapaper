@@ -45,6 +45,7 @@ const state = {
   playFrameId: null,
   undoStacks: new Map(),
   redoStacks: new Map(),
+  readonly: new URLSearchParams(location.search).has("readonly"),
   lastCursor: 0,
 };
 
@@ -917,6 +918,7 @@ async function reloadFrame(frameId) {
 let resizeState = null;
 
 function beginResize(event, frameId) {
+  if (state.readonly) return;
   const frame = state.frames.find((f) => f.id === frameId);
   if (!frame) return;
   event.stopPropagation();
@@ -1362,6 +1364,31 @@ function bind() {
     const layer = $("#cursorLayer").getBoundingClientRect();
     sendSocket({ type: "cursor", x: Math.round(event.clientX - layer.left), y: Math.round(event.clientY - layer.top) });
   });
+
+  $("#shareBtn").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      toast("Link copied");
+    } catch {
+      toast(location.href);
+    }
+  };
+
+  if (state.readonly) {
+    document.body.classList.add("readonly");
+    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment"]) {
+      const element = $(selector);
+      if (element) element.hidden = true;
+    }
+    const editor = $("#htmlEditor");
+    if (editor) editor.readOnly = true;
+    for (const input of ["#frameName", "#frameWidth", "#frameHeight", "#frameBg"]) {
+      const element = $(input);
+      if (element) element.disabled = true;
+    }
+    const tag = document.querySelector(".tag");
+    if (tag) tag.textContent = "read-only";
+  }
 
   document.addEventListener("mousemove", applyResize);
   document.addEventListener("mouseup", finishResize);
