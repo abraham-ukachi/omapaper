@@ -42,6 +42,8 @@ const state = {
   wsRetry: null,
   playStack: [],
   playFrameId: null,
+  undoStacks: new Map(),
+  redoStacks: new Map(),
   lastCursor: 0,
 };
 
@@ -901,6 +903,7 @@ function beginResize(event, frameId) {
   if (!frame) return;
   event.stopPropagation();
   event.preventDefault();
+  pushHistory(frameId);
   resizeState = {
     frameId,
     startX: event.clientX,
@@ -952,9 +955,89 @@ async function finishResize() {
   }
 }
 
+function frameSnapshot(frame) {
+  return {
+    html: frame.html || "",
+    name: frame.name,
+    width: frame.width,
+    height: frame.height,
+    x: frame.x,
+    y: frame.y,
+    background: frame.background,
+    theme: frame.theme,
+    approval: frame.approval,
+  };
+}
+
+function pushHistory(frameId) {
+  const frame = state.frames.find((f) => f.id === frameId);
+  if (!frame) return;
+  if (!state.undoStacks.has(frameId)) state.undoStacks.set(frameId, []);
+  if (!state.redoStacks.has(frameId)) state.redoStacks.set(frameId, []);
+  state.undoStacks.get(frameId).push(frameSnapshot(frame));
+  state.redoStacks.set(frameId, []);
+}
+
+async function applySnapshot(frameId, snapshot) {
+  try {
+    const updated = await api(`/api/frames/${frameId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        html: snapshot.html,
+        name: snapshot.name,
+        width: snapshot.width,
+        height: snapshot.height,
+        x: snapshot.x,
+        y: snapshot.y,
+        background: snapshot.background,
+        theme: snapshot.theme,
+        approval: snapshot.approval,
+      }),
+    });
+    const index = state.frames.findIndex((f) => f.id === frameId);
+    if (index >= 0) state.frames[index] = { ...state.frames[index], ...updated };
+    frameElement(state.frames[index]);
+    renderRail();
+    renderPanel();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function undoFrame() {
+  const frame = selectedFrame();
+  if (!frame) return;
+  const stack = state.undoStacks.get(frame.id) || [];
+  if (!stack.length) {
+    toast("Nothing to undo", true);
+    return;
+  }
+  if (!state.redoStacks.has(frame.id)) state.redoStacks.set(frame.id, []);
+  state.redoStacks.get(frame.id).push(frameSnapshot(frame));
+  const previous = stack.pop();
+  await applySnapshot(frame.id, previous);
+  toast("Undone");
+}
+
+async function redoFrame() {
+  const frame = selectedFrame();
+  if (!frame) return;
+  const stack = state.redoStacks.get(frame.id) || [];
+  if (!stack.length) {
+    toast("Nothing to redo", true);
+    return;
+  }
+  if (!state.undoStacks.has(frame.id)) state.undoStacks.set(frame.id, []);
+  state.undoStacks.get(frame.id).push(frameSnapshot(frame));
+  const next = stack.pop();
+  await applySnapshot(frame.id, next);
+  toast("Redone");
+}
+
 async function saveFrame() {
   const frame = selectedFrame();
   if (!frame) return;
+  pushHistory(frame.id);
   const body = {
     name: $("#frameName").value.trim() || frame.name,
     width: Number($("#frameWidth").value) || frame.width,
@@ -979,6 +1062,7 @@ async function saveFrame() {
 async function saveHtml() {
   const frame = selectedFrame();
   if (!frame) return;
+  pushHistory(frame.id);
   const html = $("#htmlEditor").value;
   try {
     const updated = await api(`/api/frames/${frame.id}`, {
@@ -1169,6 +1253,8 @@ function bind() {
   $("#newFrameBtn").onclick = newFrame;
   $("#saveFrame").onclick = saveFrame;
   $("#saveHtml").onclick = saveHtml;
+  $("#undoFrame").onclick = undoFrame;
+  $("#redoFrame").onclick = redoFrame;
   $("#duplicateFrame").onclick = duplicateFrame;
   $("#deleteFrame").onclick = deleteFrame;
   $("#addComment").onclick = addComment;
@@ -1222,6 +1308,16 @@ function bind() {
       return;
     }
     if (typing) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !event.shiftKey) {
+      event.preventDefault();
+      undoFrame();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === "y" || (event.shiftKey && event.key.toLowerCase() === "z"))) {
+      event.preventDefault();
+      redoFrame();
+      return;
+    }
     if (event.key === "n") {
       event.preventDefault();
       newFrame();
