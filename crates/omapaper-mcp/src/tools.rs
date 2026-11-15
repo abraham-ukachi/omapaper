@@ -293,7 +293,8 @@ pub fn definitions() -> Vec<Value> {
                 "nodeId": {"type": "string"},
                 "selector": {"type": "string"},
                 "styles": {"type": "object", "additionalProperties": {"type": ["string", "number"]}},
-                "index": {"type": "integer"}
+                "index": {"type": "integer"},
+                "all": {"type": "boolean", "description": "Apply to every match instead of one."}
             }),
             &["frameId", "styles"],
         ),
@@ -306,7 +307,8 @@ pub fn definitions() -> Vec<Value> {
                 "nodeId": {"type": "string"},
                 "selector": {"type": "string"},
                 "text": {"type": "string"},
-                "index": {"type": "integer"}
+                "index": {"type": "integer"},
+                "all": {"type": "boolean", "description": "Apply to every match instead of one."}
             }),
             &["frameId", "text"],
         ),
@@ -319,7 +321,8 @@ pub fn definitions() -> Vec<Value> {
                 "nodeId": {"type": "string"},
                 "selector": {"type": "string"},
                 "name": {"type": "string"},
-                "index": {"type": "integer"}
+                "index": {"type": "integer"},
+                "all": {"type": "boolean", "description": "Apply to every match instead of one."}
             }),
             &["frameId", "name"],
         ),
@@ -331,7 +334,8 @@ pub fn definitions() -> Vec<Value> {
                 "frameId": {"type": "string"},
                 "nodeId": {"type": "string"},
                 "selector": {"type": "string"},
-                "index": {"type": "integer"}
+                "index": {"type": "integer"},
+                "all": {"type": "boolean", "description": "Apply to every match instead of one."}
             }),
             &["frameId"],
         ),
@@ -1019,7 +1023,8 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             let selector = ctx.selector()?;
             let styles = ctx.style_map("styles")?;
             let index = ctx.opt_u64("index").map(|i| i as usize);
-            let (updated, count) = html::update_styles(&frame.html, &selector, &styles, index)
+            let all = ctx.opt_bool("all").unwrap_or(false);
+            let (updated, count) = html::update_styles(&frame.html, &selector, &styles, index, all)
                 .map_err(|e| e.to_string())?;
             host.store
                 .push_version(&frame, Some("before update_styles"), 30)
@@ -1036,8 +1041,9 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             let selector = ctx.selector()?;
             let body = ctx.req_str("text")?;
             let index = ctx.opt_u64("index").map(|i| i as usize);
+            let all = ctx.opt_bool("all").unwrap_or(false);
             let updated =
-                html::set_text(&frame.html, &selector, &body, index).map_err(|e| e.to_string())?;
+                html::set_text(&frame.html, &selector, &body, index, all).map_err(|e| e.to_string())?;
             host.store
                 .push_version(&frame, Some("before set_text_content"), 30)
                 .map_err(err)?;
@@ -1053,8 +1059,9 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             let selector = ctx.selector()?;
             let name = ctx.req_str("name")?;
             let index = ctx.opt_u64("index").map(|i| i as usize);
+            let all = ctx.opt_bool("all").unwrap_or(false);
             let updated =
-                html::rename(&frame.html, &selector, &name, index).map_err(|e| e.to_string())?;
+                html::rename(&frame.html, &selector, &name, index, all).map_err(|e| e.to_string())?;
             frame.html = updated;
             frame.revision += 1;
             host.save_frame(&frame)?;
@@ -1065,7 +1072,8 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             ensure_unlocked(&frame)?;
             let selector = ctx.selector()?;
             let index = ctx.opt_u64("index").map(|i| i as usize);
-            let updated = html::delete(&frame.html, &selector, index).map_err(|e| e.to_string())?;
+            let all = ctx.opt_bool("all").unwrap_or(false);
+            let updated = html::delete(&frame.html, &selector, index, all).map_err(|e| e.to_string())?;
             host.store
                 .push_version(&frame, Some("before delete_nodes"), 30)
                 .map_err(err)?;

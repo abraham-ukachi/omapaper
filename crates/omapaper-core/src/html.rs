@@ -445,9 +445,15 @@ pub fn update_styles(
     selector: &str,
     styles: &BTreeMap<String, String>,
     index: Option<usize>,
+    all: bool,
 ) -> Result<(String, usize)> {
-    let count = pick(find(html, selector)?, selector, index)?.len();
-    let updated = replace_document(html, selector, index, |node| {
+    let matches = find(html, selector)?;
+    let count = if all {
+        matches.len()
+    } else {
+        pick(matches.clone(), selector, index)?.len()
+    };
+    let updated = replace_document(html, selector, index, all, |node| {
         let mut map = parse_style(&attr_value(node, "style").unwrap_or_default());
         for (key, value) in styles {
             let key = kebab(key);
@@ -472,6 +478,7 @@ fn replace_document(
     html: &str,
     selector: &str,
     index: Option<usize>,
+    all: bool,
     edit: impl Fn(&Handle),
 ) -> Result<String> {
     let dom = parse(html);
@@ -495,7 +502,7 @@ fn replace_document(
             .nth(index)
             .map(|n| vec![n])
             .ok_or_else(|| HtmlError::NotFound(format!("{selector}[{index}]")))?,
-        None if matches.len() > 1 => {
+        None if !all && matches.len() > 1 => {
             return Err(HtmlError::Ambiguous(selector.to_string(), matches.len()))
         }
         None => matches,
@@ -507,8 +514,8 @@ fn replace_document(
 }
 
 /// Replaces an element's text with `text`, keeping the element itself.
-pub fn set_text(html: &str, selector: &str, text: &str, index: Option<usize>) -> Result<String> {
-    replace_document(html, selector, index, |node| {
+pub fn set_text(html: &str, selector: &str, text: &str, index: Option<usize>, all: bool) -> Result<String> {
+    replace_document(html, selector, index, all, |node| {
         node.children.borrow_mut().clear();
         let child = Node::new(NodeData::Text {
             contents: RefCell::new(text.into()),
@@ -518,14 +525,14 @@ pub fn set_text(html: &str, selector: &str, text: &str, index: Option<usize>) ->
 }
 
 /// Renames a layer (`data-name`), leaving the HTML structure alone.
-pub fn rename(html: &str, selector: &str, name: &str, index: Option<usize>) -> Result<String> {
-    replace_document(html, selector, index, |node| {
+pub fn rename(html: &str, selector: &str, name: &str, index: Option<usize>, all: bool) -> Result<String> {
+    replace_document(html, selector, index, all, |node| {
         set_attr_value(node, "data-name", name);
     })
 }
 
 /// Deletes the matched elements.
-pub fn delete(html: &str, selector: &str, index: Option<usize>) -> Result<String> {
+pub fn delete(html: &str, selector: &str, index: Option<usize>, _all: bool) -> Result<String> {
     let dom = parse(html);
     let body = body(&dom);
     let groups = parse_selector(selector)?;
@@ -926,28 +933,28 @@ mod tests {
         let mut styles = BTreeMap::new();
         styles.insert("backgroundColor".into(), "#fff".into());
         styles.insert("padding".into(), "16px".into());
-        let (html, count) = update_styles(DOC, "h1", &styles, None).unwrap();
+        let (html, count) = update_styles(DOC, "h1", &styles, None, false).unwrap();
         assert_eq!(count, 1);
         assert!(html.contains("background-color: #fff"));
         assert!(html.contains("padding: 16px"));
         // Removing with an empty value.
         let mut remove = BTreeMap::new();
         remove.insert("padding".into(), String::new());
-        let (html, _) = update_styles(&html, "h1", &remove, None).unwrap();
+        let (html, _) = update_styles(&html, "h1", &remove, None, false).unwrap();
         assert!(!html.contains("padding: 16px"));
     }
 
     #[test]
     fn sets_text_and_renames() {
-        let html = set_text(DOC, "h1", "Bonjour", None).unwrap();
+        let html = set_text(DOC, "h1", "Bonjour", None, false).unwrap();
         assert!(html.contains(">Bonjour<"));
-        let html = rename(&html, "main", "Hero", None).unwrap();
+        let html = rename(&html, "main", "Hero", None, false).unwrap();
         assert!(html.contains("data-name=\"Hero\""));
     }
 
     #[test]
     fn deletes_nodes() {
-        let html = delete(DOC, "p", None).unwrap();
+        let html = delete(DOC, "p", None, false).unwrap();
         assert!(!html.contains("<p>"));
         assert!(html.contains("<h1"));
     }
@@ -962,6 +969,7 @@ mod tests {
             ".card",
             &BTreeMap::from([("color".to_string(), "#000".to_string())]),
             None,
+            false,
         )
         .unwrap()
         .0;
@@ -996,6 +1004,7 @@ mod tests {
             "h1",
             &BTreeMap::from([("color".to_string(), "red".to_string())]),
             Some(3),
+            false,
         )
         .unwrap_err();
         assert!(matches!(err, HtmlError::NotFound(_)));
