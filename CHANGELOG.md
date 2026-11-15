@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.4.0-beta.2] - 2026-11-16
+
+### Fixed
+- :bug: Canvas viewer now loads after the window is realized, fixing first-open blank canvas.
+- :bug: Daemon readiness wait increased for cold starts.
+
+### Notes
+- Beta release.
+
 ## [0.4.0-beta.1] - 2026-11-16
 
 ### Added

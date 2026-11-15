@@ -74,10 +74,10 @@ fn main() {
         settings.set_enable_smooth_scrolling(true);
         settings.set_enable_page_cache(false);
     }
-    view.load_uri(&args.url);
-
     window.add(&view);
     window.show_all();
+    // Load after the window is realized so the first paint is not dropped.
+    view.load_uri(&args.url);
     window.connect_destroy(|_| gtk::main_quit());
     view.connect_close(|_| gtk::main_quit());
 

@@ -193,7 +193,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let weak = ui.as_weak();
         let base = args.base.clone();
         std::thread::spawn(move || {
-            wait_for_daemon(&base, 40);
+            wait_for_daemon(&base, 100);
             open_url(&base, Some(&canvas), false);
             // Show it in the cockpit too.
             let _ = weak.upgrade_in_event_loop(|ui| {
@@ -240,7 +240,7 @@ fn ensure_daemon(args: &Args) {
             return;
         }
     }
-    wait_for_daemon(&args.base, 50);
+    wait_for_daemon(&args.base, 100);
 }
 
 fn wait_for_daemon(base: &str, tenths: usize) {
