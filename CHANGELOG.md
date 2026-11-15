@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.3.0-beta.2] - 2026-11-15
+
+### Added
+- :sparkles: Share button now copies a view-only link (`?canvas=...&readonly=1`).
+- :sparkles: Canvas selection respects `?canvas=` in the URL for shared links.
+
+### Notes
+- Beta release.
+
 ## [0.3.0-beta.1] - 2026-11-15
 
 ### Added

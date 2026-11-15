@@ -1366,11 +1366,14 @@ function bind() {
   });
 
   $("#shareBtn").onclick = async () => {
+    const url = new URL(location.href);
+    if (state.canvasId) url.searchParams.set("canvas", state.canvasId);
+    url.searchParams.set("readonly", "1");
     try {
-      await navigator.clipboard.writeText(location.href);
-      toast("Link copied");
+      await navigator.clipboard.writeText(url.toString());
+      toast("View-only link copied");
     } catch {
-      toast(location.href);
+      toast(url.toString());
     }
   };
 
