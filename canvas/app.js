@@ -310,7 +310,7 @@ function frameElement(frame) {
         <button data-act="html" title="Inspect HTML">html</button>
         <button data-act="png" title="Export PNG">png</button>
       </div>
-      <div class="canvas-box"><iframe title="${escapeAttr(frame.name)}"></iframe></div>`;
+      <div class="canvas-box"><iframe title="${escapeAttr(frame.name)}"></iframe><div class="resize-handle" title="Resize frame" aria-label="Resize frame"></div></div>`;
     frameElements.set(frame.id, element);
     element.addEventListener("click", (event) => {
       if (event.target.closest(".frame-tools")) return;
@@ -331,6 +331,7 @@ function frameElement(frame) {
         window.open(`/api/frames/${frame.id}/export?format=png`, "_blank");
       }
     });
+    element.querySelector(".resize-handle").addEventListener("mousedown", (event) => beginResize(event, frame.id));
     element.querySelector("iframe").addEventListener("load", () => wireFrame(frame.id));
   }
 
@@ -893,6 +894,64 @@ async function reloadFrame(frameId) {
   renderPanel();
 }
 
+let resizeState = null;
+
+function beginResize(event, frameId) {
+  const frame = state.frames.find((f) => f.id === frameId);
+  if (!frame) return;
+  event.stopPropagation();
+  event.preventDefault();
+  resizeState = {
+    frameId,
+    startX: event.clientX,
+    startY: event.clientY,
+    width: frame.width,
+    height: frame.height,
+    currentWidth: frame.width,
+    currentHeight: frame.height,
+  };
+  document.body.style.cursor = "nwse-resize";
+}
+
+function applyResize(event) {
+  if (!resizeState) return;
+  const scale = state.zoom || 1;
+  const width = Math.max(120, resizeState.width + (event.clientX - resizeState.startX) / scale);
+  const height = Math.max(120, resizeState.height + (event.clientY - resizeState.startY) / scale);
+  resizeState.currentWidth = width;
+  resizeState.currentHeight = height;
+  const element = frameElements.get(resizeState.frameId);
+  if (!element) return;
+  element.style.setProperty("--w", `${width}px`);
+  element.style.setProperty("--h", `${height}px`);
+  const size = element.querySelector(".size");
+  if (size) size.textContent = `${Math.round(width)}×${Math.round(height)}`;
+}
+
+async function finishResize() {
+  if (!resizeState) return;
+  const { frameId, currentWidth, currentHeight } = resizeState;
+  resizeState = null;
+  document.body.style.cursor = "";
+  const frame = state.frames.find((f) => f.id === frameId);
+  if (!frame) return;
+  try {
+    const updated = await api(`/api/frames/${frameId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ width: currentWidth, height: currentHeight }),
+    });
+    const index = state.frames.findIndex((f) => f.id === frameId);
+    if (index >= 0) state.frames[index] = { ...state.frames[index], ...updated };
+    frameElement(state.frames[index]);
+    renderRail();
+    renderPanel();
+    toast("Frame resized");
+  } catch (error) {
+    toast(error.message, true);
+    await reloadFrame(frameId);
+  }
+}
+
 async function saveFrame() {
   const frame = selectedFrame();
   if (!frame) return;
@@ -1189,6 +1248,9 @@ function bind() {
     const layer = $("#cursorLayer").getBoundingClientRect();
     sendSocket({ type: "cursor", x: Math.round(event.clientX - layer.left), y: Math.round(event.clientY - layer.top) });
   });
+
+  document.addEventListener("mousemove", applyResize);
+  document.addEventListener("mouseup", finishResize);
 
   window.addEventListener("beforeunload", () => {
     if (state.ws) state.ws.close();

@@ -366,6 +366,8 @@ button:focus-visible { outline: 2px solid var(--op-accent); outline-offset: 2px;
 }
 
 .frame.selected .canvas-box { outline: 2px solid var(--op-accent); outline-offset: 1px; }
+.resize-handle { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 2px; background: var(--op-accent); border: 1px solid var(--op-bg); cursor: nwse-resize; opacity: 0; transition: opacity .12s; z-index: 3; }
+.frame:hover .resize-handle, .frame.selected .resize-handle { opacity: 1; }
 .frame.selected .frame-head .fname { color: var(--op-accent); }
 
 .canvas-box iframe {
