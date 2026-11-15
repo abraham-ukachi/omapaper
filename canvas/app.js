@@ -216,12 +216,24 @@ function renderRail() {
     const count = state.frames.filter((f) => f.pageId === page.id).length;
     const button = document.createElement("button");
     button.className = "nav-item page-item";
-    button.innerHTML = `<span class="glyph">▤</span><span class="label"></span><span class="count">${count}</span>`;
+    button.innerHTML = `<span class="glyph">▤</span><span class="label"></span><span class="count">${count}</span>${state.readonly ? "" : `<span class="page-actions"><button class="page-action" title="Rename page">✎</button><button class="page-action danger" title="Delete page">×</button></span>`}`;
     button.querySelector(".label").textContent = page.name;
     button.onclick = () => {
       const block = pageBlocks.get(page.id);
       block?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
+    if (!state.readonly) {
+      const actions = button.querySelector(".page-actions");
+      const [renameBtn, deleteBtn] = actions.querySelectorAll("button");
+      renameBtn.onclick = (event) => {
+        event.stopPropagation();
+        renamePage(page.id, page.name);
+      };
+      deleteBtn.onclick = (event) => {
+        event.stopPropagation();
+        deletePage(page.id);
+      };
+    }
     pageNav.appendChild(button);
   }
 
@@ -946,9 +958,7 @@ function handleEvent(event) {
     case "canvas.updated":
       if (event.canvas.id === state.canvasId) {
         state.canvas = event.canvas;
-        renderRail();
-        renderStage();
-        renderTokens();
+        reloadCanvasData().catch(() => {});
       }
       break;
     case "canvas.created":
@@ -1189,6 +1199,68 @@ async function newFrame() {
   }
 }
 
+async function reloadCanvasData() {
+  if (!state.canvasId) return;
+  try {
+    const data = await api(`/api/canvases/${state.canvasId}`);
+    state.canvas = data.canvas;
+    state.frames = data.frames;
+    state.comments = data.comments || [];
+    if (!state.frames.some((f) => f.id === state.selectedFrameId)) {
+      state.selectedFrameId = state.frames[0]?.id || "";
+    }
+    store.set("frame", state.selectedFrameId);
+    resetStage();
+    renderAll();
+    renderDashboard();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function newPage() {
+  if (!state.canvasId || state.readonly) return;
+  const name = prompt("Page name", `Page ${(state.canvas?.pages?.length || 0) + 1}`);
+  if (!name || !name.trim()) return;
+  try {
+    await api(`/api/canvases/${state.canvasId}/pages`, {
+      method: "POST",
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    toast("Page created");
+    await reloadCanvasData();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function renamePage(pageId, current) {
+  if (state.readonly) return;
+  const name = prompt("Rename page", current);
+  if (!name || !name.trim() || name.trim() === current) return;
+  try {
+    await api(`/api/canvases/${state.canvasId}/pages/${pageId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    await reloadCanvasData();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function deletePage(pageId) {
+  if (state.readonly) return;
+  if (!confirm("Delete this page? Its frames will move to another page.")) return;
+  try {
+    await api(`/api/canvases/${state.canvasId}/pages/${pageId}`, { method: "DELETE" });
+    toast("Page deleted");
+    await reloadCanvasData();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 async function duplicateFrame() {
   const frame = selectedFrame();
   if (!frame) return;
@@ -1344,6 +1416,7 @@ function bind() {
   $("#newCanvasBtn").onclick = newCanvas;
   $("#renameCanvas").onclick = renameCanvas;
   $("#newFrameBtn").onclick = newFrame;
+  $("#newPageBtn").onclick = newPage;
   $("#importFrameBtn").onclick = () => $("#importFile").click();
   $("#importFile").onchange = async (event) => {
     const file = event.target.files?.[0];
@@ -1474,7 +1547,7 @@ function bind() {
 
   if (state.readonly) {
     document.body.classList.add("readonly");
-    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment"]) {
+    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#newPageBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment"]) {
       const element = $(selector);
       if (element) element.hidden = true;
     }

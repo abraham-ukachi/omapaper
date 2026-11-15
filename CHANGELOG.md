@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.3.0-beta.5] - 2026-11-15
+
+### Added
+- :sparkles: Page management in the canvas: create, rename and delete pages.
+- :sparkles: Frames move to another page when their page is deleted.
+
+### Notes
+- Beta release.
+
 ## [0.3.0-beta.4] - 2026-11-15
 
 ### Added

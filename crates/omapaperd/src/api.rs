@@ -63,6 +63,14 @@ pub fn router(app: Shared) -> Router {
             get(get_canvas).patch(patch_canvas).delete(delete_canvas),
         )
         .route(
+            "/api/canvases/{id}/pages",
+            post(create_page),
+        )
+        .route(
+            "/api/canvases/{id}/pages/{page}",
+            patch(patch_page).delete(delete_page),
+        )
+        .route(
             "/api/canvases/{id}/frames",
             get(list_frames).post(create_frame),
         )
@@ -313,6 +321,92 @@ async fn delete_canvas(State(app): State<Shared>, Path(id): Path<String>) -> Api
     app.live
         .send(json!({"type": "canvas.deleted", "canvasId": id}));
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct CreatePage {
+    name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct PatchPage {
+    name: Option<String>,
+}
+
+async fn create_page(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(body): Json<CreatePage>,
+) -> ApiResult<Json<Canvas>> {
+    let mut canvas = app
+        .host
+        .store
+        .get_canvas(&id)?
+        .ok_or_else(|| ApiError::not_found(format!("no canvas `{id}`")))?;
+    let name = body.name.unwrap_or_else(|| format!("Page {}", canvas.pages.len() + 1));
+    canvas.pages.push(omapaper_core::model::Page::new(name));
+    app.host.store.save_canvas(&canvas)?;
+    app.live
+        .send(json!({"type": "canvas.updated", "canvas": canvas}));
+    Ok(Json(canvas))
+}
+
+async fn patch_page(
+    State(app): State<Shared>,
+    Path((id, page_id)): Path<(String, String)>,
+    Json(body): Json<PatchPage>,
+) -> ApiResult<Json<Canvas>> {
+    let mut canvas = app
+        .host
+        .store
+        .get_canvas(&id)?
+        .ok_or_else(|| ApiError::not_found(format!("no canvas `{id}`")))?;
+    let page = canvas
+        .pages
+        .iter_mut()
+        .find(|page| page.id == page_id)
+        .ok_or_else(|| ApiError::not_found(format!("no page `{page_id}`")))?;
+    if let Some(name) = body.name {
+        page.name = name;
+    }
+    app.host.store.save_canvas(&canvas)?;
+    app.live
+        .send(json!({"type": "canvas.updated", "canvas": canvas}));
+    Ok(Json(canvas))
+}
+
+async fn delete_page(
+    State(app): State<Shared>,
+    Path((id, page_id)): Path<(String, String)>,
+) -> ApiResult<Json<Canvas>> {
+    let mut canvas = app
+        .host
+        .store
+        .get_canvas(&id)?
+        .ok_or_else(|| ApiError::not_found(format!("no canvas `{id}`")))?;
+    if canvas.pages.len() <= 1 {
+        return Err(ApiError::bad("cannot delete the last page"));
+    }
+    let target = canvas
+        .pages
+        .iter()
+        .find(|page| page.id != page_id)
+        .map(|page| page.id.clone())
+        .ok_or_else(|| ApiError::bad("no page to move frames to"))?;
+    // move frames from deleted page to the first remaining page
+    let frames = app.host.store.frames(&id)?;
+    for mut frame in frames {
+        if frame.page_id == page_id {
+            frame.page_id = target.clone();
+            app.host.store.save_frame(&frame)?;
+        }
+    }
+    canvas.pages.retain(|page| page.id != page_id);
+    app.host.store.save_canvas(&canvas)?;
+    app.live
+        .send(json!({"type": "canvas.updated", "canvas": canvas}));
+    // reload frames in UI happens via canvas.updated? canvas has no frames; emit frame list? UI calls loadCanvas on canvas.updated? Check.
+    Ok(Json(canvas))
 }
 
 // ---- frames ---------------------------------------------------------------
