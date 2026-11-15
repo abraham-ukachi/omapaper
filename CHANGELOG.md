@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.3.0-beta.3] - 2026-11-15
+
+### Added
+- :sparkles: Launcher closes after opening a canvas; theme now follows Omarchy live.
+- :sparkles: Launcher count moved left of "Canvases"; refresh/delete are icon buttons.
+- :sparkles: Removed theme chip from launcher; added safe canvas delete.
+- :sparkles: Dashboard tab in the canvas with overview, quick actions, frames and comments.
+
+### Notes
+- Beta release.
+
 ## [0.3.0-beta.2] - 2026-11-15
 
 ### Added

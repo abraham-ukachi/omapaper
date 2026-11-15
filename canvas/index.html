@@ -77,12 +77,21 @@
 
       <aside class="panel" aria-label="Inspector">
         <div class="tabs" role="tablist">
-          <button class="tab active" data-tab="inspect" role="tab">Inspect</button>
+          <button class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
+          <button class="tab" data-tab="inspect" role="tab">Inspect</button>
           <button class="tab" data-tab="tokens" role="tab">Tokens</button>
           <button class="tab" data-tab="comments" role="tab">Comments <span id="commentCount" class="count"></span></button>
         </div>
 
-        <section id="pane-inspect" class="pane">
+        <section id="pane-dashboard" class="pane">
+          <div class="pane-intro">
+            <p class="kicker">dashboard</p>
+            <p class="muted">Overview of this canvas: pages, frames, comments, and quick actions.</p>
+          </div>
+          <div id="dashboardBody" class="dashboard"></div>
+        </section>
+
+        <section id="pane-inspect" class="pane" hidden>
           <div id="inspectEmpty" class="pane-empty">
             <p class="kicker">inspector</p>
             <p class="muted">Select a frame to see its HTML, size and versions. Click inside the frame to pick an element.</p>

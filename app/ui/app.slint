@@ -199,6 +199,7 @@ export component AppWindow inherits Window {
 
     callback refresh();
     callback create(string);
+    callback delete-canvas(string);
     callback open-canvas(string);
     callback open-browser();
 
@@ -232,7 +233,6 @@ export component AppWindow inherits Window {
 
             Rectangle { }
 
-            Chip { label: Palette.theme-name; }
             Chip { label: root.endpoint; }
             ActionButton {
                 label: "Open in browser";
@@ -256,30 +256,70 @@ export component AppWindow inherits Window {
                     alignment: start;
                     spacing: 8px;
                     Text {
+                        text: root.canvases.length;
+                        color: Palette.muted;
+                        font-size: 12px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                    Text {
                         text: "Canvases";
                         color: Palette.fg;
                         font-size: 12px;
                         font-weight: 700;
                         letter-spacing: 1px;
-                    }
-                    Text {
-                        text: root.canvases.length;
-                        color: Palette.muted;
-                        font-size: 12px;
                         vertical-alignment: center;
                     }
                     Rectangle { }
-                    Text {
-                        text: "refresh";
-                        color: refresh-area.has-hover ? Palette.fg : Palette.muted;
-                        font-size: 11px;
-                        vertical-alignment: center;
-                    }
-                    refresh-area := TouchArea {
-                        width: 52px;
+
+                    Rectangle {
+                        width: 26px;
                         height: 22px;
-                        mouse-cursor: pointer;
-                        clicked => { root.refresh(); }
+                        border-radius: 6px;
+                        background: refresh-area.has-hover ? Palette.hover : Palette.surface;
+                        border-width: 1px;
+                        border-color: Palette.line;
+                        Text {
+                            text: "↻";
+                            color: Palette.fg;
+                            font-size: 13px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            width: parent.width;
+                            height: parent.height;
+                        }
+                        refresh-area := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.refresh(); }
+                        }
+                    }
+
+                    Rectangle {
+                        width: 26px;
+                        height: 22px;
+                        border-radius: 6px;
+                        background: delete-area.has-hover ? Palette.hover : Palette.surface;
+                        border-width: 1px;
+                        border-color: Palette.line;
+                        opacity: (root.selected >= 0 && root.selected < root.canvases.length) ? 1.0 : 0.45;
+                        Text {
+                            text: "🗑";
+                            color: Palette.fg;
+                            font-size: 12px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            width: parent.width;
+                            height: parent.height;
+                        }
+                        delete-area := TouchArea {
+                            enabled: root.selected >= 0 && root.selected < root.canvases.length;
+                            mouse-cursor: pointer;
+                            clicked => {
+                                if (root.selected >= 0 && root.selected < root.canvases.length) {
+                                    root.delete-canvas(root.canvases[root.selected].id);
+                                }
+                            }
+                        }
                     }
                 }
 

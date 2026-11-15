@@ -36,7 +36,7 @@ const state = {
   selectedFrameId: store.get("frame", ""),
   selectedNode: null,
   selectedNodes: [],
-  tab: "inspect",
+  tab: "dashboard",
   peerId: store.get("peer", "") || crypto.randomUUID(),
   name: store.get("name", "You"),
   ws: null,
@@ -144,6 +144,7 @@ async function loadCanvas(id) {
   store.set("frame", state.selectedFrameId);
   resetStage();
   renderAll();
+  renderDashboard();
   if (state.ws && state.ws.readyState === 1) state.ws.close();
   connect();
 }
@@ -536,6 +537,76 @@ function escapeHtml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function renderDashboard() {
+  const target = $("#dashboardBody");
+  if (!target) return;
+  target.innerHTML = "";
+  const canvas = state.canvas || {};
+  const frames = state.frames || [];
+  const comments = state.comments || [];
+  const pages = Array.isArray(canvas.pages) ? canvas.pages.length : 0;
+  const tokens = Array.isArray(canvas.tokens) ? canvas.tokens.length : 0;
+
+  const card = document.createElement("div");
+  card.className = "dashboard-card";
+  card.innerHTML = `<h3>${escapeHtml(canvas.name || "Untitled canvas")}</h3><p class="muted">${pages} page${pages === 1 ? "" : "s"} · ${frames.length} frame${frames.length === 1 ? "" : "s"} · ${comments.length} comment${comments.length === 1 ? "" : "s"} · ${tokens} token${tokens === 1 ? "" : "s"}</p>`;
+  target.appendChild(card);
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  if (!state.readonly) {
+    const newBtn = document.createElement("button");
+    newBtn.className = "primary small";
+    newBtn.textContent = "+ Frame";
+    newBtn.onclick = newFrame;
+    actions.appendChild(newBtn);
+  }
+  const playBtn = document.createElement("button");
+  playBtn.className = "ghost small";
+  playBtn.textContent = "▶ Play";
+  playBtn.onclick = () => openPlay();
+  actions.appendChild(playBtn);
+  target.appendChild(actions);
+
+  const frameTitle = document.createElement("div");
+  frameTitle.className = "rail-label";
+  frameTitle.textContent = "frames";
+  target.appendChild(frameTitle);
+  const frameList = document.createElement("div");
+  frameList.className = "dashboard-list";
+  if (!frames.length) {
+    frameList.innerHTML = `<span class="muted small">No frames yet.</span>`;
+  } else {
+    for (const frame of frames.slice(0, 8)) {
+      const row = document.createElement("div");
+      row.className = "dashboard-row";
+      row.innerHTML = `<span class="name">${escapeHtml(frame.name || "Untitled")}</span><span class="meta">${frame.width}×${frame.height} · ${escapeHtml(frame.approval || "draft")}</span>`;
+      row.onclick = () => {
+        selectFrame(frame.id);
+        setTab("inspect");
+      };
+      frameList.appendChild(row);
+    }
+  }
+  target.appendChild(frameList);
+
+  if (comments.length) {
+    const commentTitle = document.createElement("div");
+    commentTitle.className = "rail-label";
+    commentTitle.textContent = "recent comments";
+    target.appendChild(commentTitle);
+    const commentList = document.createElement("div");
+    commentList.className = "comment-list";
+    for (const comment of comments.slice(0, 5)) {
+      const item = document.createElement("div");
+      item.className = "comment";
+      item.innerHTML = `<div class="cbody">${escapeHtml(comment.body || "")}</div>`;
+      commentList.appendChild(item);
+    }
+    target.appendChild(commentList);
+  }
 }
 
 async function loadFrameHtml(frame) {
@@ -1199,9 +1270,11 @@ function applyZoom() {
 function setTab(tab) {
   state.tab = tab;
   for (const button of $$(".tab")) button.classList.toggle("active", button.dataset.tab === tab);
-  for (const pane of ["inspect", "tokens", "comments"]) {
-    $(`#pane-${pane}`).hidden = pane !== tab;
+  for (const pane of ["dashboard", "inspect", "tokens", "comments"]) {
+    const element = $(`#pane-${pane}`);
+    if (element) element.hidden = pane !== tab;
   }
+  if (tab === "dashboard") renderDashboard();
 }
 
 function openPlay(frameId = state.selectedFrameId) {

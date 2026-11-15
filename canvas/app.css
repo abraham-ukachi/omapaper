@@ -618,6 +618,24 @@ button:focus-visible { outline: 2px solid var(--op-accent); outline-offset: 2px;
 .comment .cbody { margin: 6px 0 0; white-space: pre-wrap; }
 .comment .replies { margin-top: 7px; padding-left: 9px; border-left: 1px solid var(--op-line); display: grid; gap: 5px; }
 .comment .reply { font-size: 10.5px; color: var(--op-muted); }
+
+.dashboard { display: grid; gap: 12px; }
+.dashboard-card { border: 1px solid var(--op-line); border-radius: 6px; padding: 12px; background: var(--op-bg); }
+.dashboard-card h3 { margin: 0 0 4px; font-size: 16px; color: var(--op-fg); }
+.dashboard-list { display: grid; gap: 6px; }
+.dashboard-row {
+  border: 1px solid var(--op-line);
+  border-radius: 5px;
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  background: var(--op-surface);
+}
+.dashboard-row:hover { background: var(--op-hover); }
+.dashboard-row .name { color: var(--op-fg); font-weight: 600; }
+.dashboard-row .meta { color: var(--op-muted); font-size: 10px; }
 .comment .reply b { color: var(--op-fg); font-weight: 600; }
 .comment .cactions { display: flex; gap: 6px; margin-top: 8px; }
 .comment .cactions button { min-height: 22px; padding: 0 7px; font-size: 9px; }

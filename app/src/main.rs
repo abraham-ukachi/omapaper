@@ -108,6 +108,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     apply_theme(&ui);
     ui.set_endpoint(args.base.clone().into());
 
+    // Follow Omarchy theme changes live.
+    {
+        let weak = ui.as_weak();
+        std::thread::spawn(move || {
+            let mut last = Theme::live_omarchy();
+            loop {
+                std::thread::sleep(Duration::from_secs(2));
+                let current = Theme::live_omarchy();
+                let changed = match (&last, &current) {
+                    (Some(a), Some(b)) => {
+                        a.name != b.name || a.accent != b.accent || a.background != b.background
+                    }
+                    (None, Some(_)) => true,
+                    _ => false,
+                };
+                if changed {
+                    let weak = weak.clone();
+                    let _ = weak.upgrade_in_event_loop(|ui| apply_theme(&ui));
+                }
+                last = current;
+            }
+        });
+    }
+
     let base = args.base.clone();
     let weak = ui.as_weak();
     ui.on_refresh(move || {
@@ -130,8 +154,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let base = args.base.clone();
     let browser = args.browser;
+    let weak_open = ui.as_weak();
     ui.on_open_canvas(move |id| {
         open_url(&base, Some(id.as_str()), browser);
+        let weak = weak_open.clone();
+        let _ = weak.upgrade_in_event_loop(|ui| {
+            let _ = ui.hide();
+        });
+        let _ = slint::quit_event_loop();
+    });
+
+    let base = args.base.clone();
+    let weak_delete = ui.as_weak();
+    ui.on_delete_canvas(move |id| {
+        let id = id.to_string();
+        let weak = weak_delete.clone();
+        let base = base.clone();
+        std::thread::spawn(move || {
+            let _ = agent().delete(&format!("{base}/api/canvases/{id}")).call();
+            refresh(&weak, &base);
+        });
     });
 
     let base = args.base.clone();
