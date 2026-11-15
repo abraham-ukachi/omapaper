@@ -58,6 +58,7 @@ pub fn router(app: Shared) -> Router {
         .route("/api/theme", get(theme))
         .route("/theme.css", get(theme_css))
         .route("/api/canvases", get(list_canvases).post(create_canvas))
+        .route("/api/canvases/{id}/duplicate", post(duplicate_canvas))
         .route(
             "/api/canvases/{id}",
             get(get_canvas).patch(patch_canvas).delete(delete_canvas),
@@ -321,6 +322,41 @@ async fn delete_canvas(State(app): State<Shared>, Path(id): Path<String>) -> Api
     app.live
         .send(json!({"type": "canvas.deleted", "canvasId": id}));
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn duplicate_canvas(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Canvas>> {
+    let source = app
+        .host
+        .store
+        .get_canvas(&id)?
+        .ok_or_else(|| ApiError::not_found(format!("no canvas `{id}`")))?;
+    let mut canvas = app
+        .host
+        .store
+        .create_canvas(&format!("{} copy", source.name))?;
+    canvas.pages = source.pages;
+    canvas.tokens = source.tokens;
+    canvas.token_themes = source.token_themes;
+    canvas.guidelines = source.guidelines;
+    canvas.decisions = source.decisions;
+    app.host.store.save_canvas(&canvas)?;
+
+    for mut frame in app.host.store.frames(&id)? {
+        frame.id = new_id();
+        frame.canvas_id = canvas.id.clone();
+        app.host.store.insert_frame(&frame)?;
+    }
+    for mut comment in app.host.store.comments(&id)? {
+        comment.id = new_id();
+        comment.canvas_id = canvas.id.clone();
+        app.host.store.add_comment(&comment)?;
+    }
+    app.live
+        .send(json!({"type": "canvas.created", "canvas": canvas}));
+    Ok(Json(canvas))
 }
 
 #[derive(Deserialize)]

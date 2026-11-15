@@ -1242,6 +1242,21 @@ async function newPage() {
   }
 }
 
+async function duplicateCanvas() {
+  if (!state.canvasId || state.readonly) return;
+  try {
+    const canvas = await api(`/api/canvases/${state.canvasId}/duplicate`, { method: "POST" });
+    toast("Canvas duplicated");
+    await loadCanvases();
+    if (canvas?.id) {
+      state.canvasId = canvas.id;
+      await loadCanvas(canvas.id);
+    }
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 async function renamePage(pageId, current) {
   if (state.readonly) return;
   const name = prompt("Rename page", current);
@@ -1424,6 +1439,7 @@ function bind() {
   $("#newCanvasBtn").onclick = newCanvas;
   $("#renameCanvas").onclick = renameCanvas;
   $("#newFrameBtn").onclick = newFrame;
+  $("#duplicateCanvasBtn").onclick = duplicateCanvas;
   $("#newPageBtn").onclick = newPage;
   $("#importFrameBtn").onclick = () => $("#importFile").click();
   $("#frameSearch").oninput = (event) => {
@@ -1559,7 +1575,7 @@ function bind() {
 
   if (state.readonly) {
     document.body.classList.add("readonly");
-    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#newPageBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment"]) {
+    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#newPageBtn", "#duplicateCanvasBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment"]) {
       const element = $(selector);
       if (element) element.hidden = true;
     }

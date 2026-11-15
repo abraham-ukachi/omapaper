@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.3.2-beta.1] - 2026-11-15
+
+### Added
+- :sparkles: Duplicate canvas action in the canvas UI.
+- :sparkles: `/api/canvases/{id}/duplicate` endpoint copying pages, tokens, frames and comments.
+
+### Notes
+- Beta release.
+
 ## [0.3.1-beta.1] - 2026-11-15
 
 ### Added
