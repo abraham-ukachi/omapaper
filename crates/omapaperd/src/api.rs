@@ -18,6 +18,7 @@ use omapaper_core::{render, theme::Theme, tokens, Health, VERSION};
 use omapaper_mcp::Host;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::net::UdpSocket;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -30,6 +31,7 @@ pub struct App {
     pub host: Host,
     pub live: Arc<Live>,
     pub data_dir: PathBuf,
+    pub port: u16,
 }
 
 impl App {
@@ -51,6 +53,7 @@ pub fn router(app: Shared) -> Router {
         .route("/app.js", get(js))
         .route("/health", get(health))
         .route("/api/info", get(info))
+        .route("/api/network", get(network_info))
         .route("/api/themes", get(themes))
         .route("/api/theme", get(theme))
         .route("/theme.css", get(theme_css))
@@ -182,6 +185,24 @@ async fn info(State(app): State<Shared>) -> Json<Value> {
         "renderer": app.host.renderer.name(),
         "dataDir": app.data_dir,
         "protocol": omapaper_mcp::PROTOCOL_VERSION,
+    }))
+}
+
+async fn network_info(State(app): State<Shared>) -> Json<Value> {
+    let mut addresses = Vec::new();
+    if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
+        if socket.connect("8.8.8.8:80").is_ok() {
+            if let Ok(address) = socket.local_addr() {
+                let ip = address.ip();
+                if !ip.is_loopback() {
+                    addresses.push(ip.to_string());
+                }
+            }
+        }
+    }
+    Json(json!({
+        "port": app.port,
+        "addresses": addresses,
     }))
 }
 

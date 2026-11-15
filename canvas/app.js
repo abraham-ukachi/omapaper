@@ -1344,6 +1344,23 @@ function bind() {
   $("#newCanvasBtn").onclick = newCanvas;
   $("#renameCanvas").onclick = renameCanvas;
   $("#newFrameBtn").onclick = newFrame;
+  $("#importFrameBtn").onclick = () => $("#importFile").click();
+  $("#importFile").onchange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !state.canvasId) return;
+    try {
+      const html = await file.text();
+      await api(`/api/canvases/${state.canvasId}/frames`, {
+        method: "POST",
+        body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, ""), html }),
+      });
+      toast("Imported");
+      await loadCanvas(state.canvasId);
+    } catch (error) {
+      toast(error.message, true);
+    }
+  };
   $("#saveFrame").onclick = saveFrame;
   $("#saveHtml").onclick = saveHtml;
   $("#undoFrame").onclick = undoFrame;
@@ -1439,12 +1456,17 @@ function bind() {
   });
 
   $("#shareBtn").onclick = async () => {
-    const url = new URL(location.href);
+    const info = await api("/api/network").catch(() => null);
+    const address = info?.addresses?.[0];
+    const port = info?.port || location.port || 4310;
+    const base = address ? `http://${address}:${port}` : `${location.protocol}//${location.host}`;
+    const url = new URL(base);
+    url.pathname = location.pathname;
     if (state.canvasId) url.searchParams.set("canvas", state.canvasId);
     url.searchParams.set("readonly", "1");
     try {
       await navigator.clipboard.writeText(url.toString());
-      toast("View-only link copied");
+      toast(address ? `LAN link copied (${address})` : "View-only link copied");
     } catch {
       toast(url.toString());
     }
@@ -1452,7 +1474,7 @@ function bind() {
 
   if (state.readonly) {
     document.body.classList.add("readonly");
-    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment"]) {
+    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment"]) {
       const element = $(selector);
       if (element) element.hidden = true;
     }

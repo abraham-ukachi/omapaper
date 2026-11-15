@@ -122,6 +122,7 @@ async fn main() {
         host,
         live: live.clone(),
         data_dir: args.data_dir.clone(),
+        port: args.port,
     });
 
     // Follow the Omarchy theme: a switch in the bar restyles every open tab.

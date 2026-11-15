@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.3.0-beta.4] - 2026-11-15
+
+### Added
+- :sparkles: LAN-aware Share button using `/api/network` to copy a reachable LAN URL.
+- :sparkles: HTML file import in the canvas UI (Import button).
+- :sparkles: `/api/network` endpoint exposing local addresses and port.
+
+### Notes
+- Beta release.
+
 ## [0.3.0-beta.3] - 2026-11-15
 
 ### Added
