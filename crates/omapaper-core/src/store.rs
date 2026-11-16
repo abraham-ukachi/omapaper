@@ -177,6 +177,54 @@ impl Store {
                   created_at INTEGER NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS webhooks_canvas ON webhooks (canvas_id);
+                CREATE TABLE IF NOT EXISTS board_cards (
+                  id TEXT PRIMARY KEY,
+                  canvas_id TEXT NOT NULL,
+                  title TEXT NOT NULL,
+                  brief TEXT NOT NULL,
+                  role TEXT NOT NULL DEFAULT 'design',
+                  status TEXT NOT NULL DEFAULT 'queued',
+                  frame_id TEXT,
+                  created_by TEXT NOT NULL DEFAULT '',
+                  result TEXT,
+                  error TEXT,
+                  created_at INTEGER NOT NULL,
+                  updated_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS board_cards_canvas ON board_cards (canvas_id, created_at);
+                CREATE TABLE IF NOT EXISTS automations (
+                  id TEXT PRIMARY KEY,
+                  canvas_id TEXT NOT NULL,
+                  name TEXT NOT NULL,
+                  trigger TEXT NOT NULL DEFAULT 'comment_created',
+                  interval_minutes INTEGER,
+                  brief TEXT NOT NULL,
+                  role TEXT NOT NULL DEFAULT 'design',
+                  enabled INTEGER NOT NULL DEFAULT 1,
+                  last_run_at INTEGER,
+                  created_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS automations_canvas ON automations (canvas_id);
+                CREATE TABLE IF NOT EXISTS data_sources (
+                  id TEXT PRIMARY KEY,
+                  canvas_id TEXT NOT NULL,
+                  name TEXT NOT NULL,
+                  kind TEXT NOT NULL DEFAULT 'json',
+                  path TEXT NOT NULL,
+                  updated_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS data_sources_canvas ON data_sources (canvas_id);
+                CREATE TABLE IF NOT EXISTS sync_targets (
+                  id TEXT PRIMARY KEY,
+                  canvas_id TEXT NOT NULL,
+                  frame_id TEXT NOT NULL,
+                  selector TEXT NOT NULL DEFAULT '',
+                  path TEXT NOT NULL,
+                  kind TEXT NOT NULL DEFAULT 'text',
+                  last_synced_at INTEGER,
+                  created_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS sync_targets_canvas ON sync_targets (canvas_id);
                 "#,
             )?;
             Ok(())
@@ -315,6 +363,11 @@ impl Store {
             conn.execute("DELETE FROM frames WHERE canvas_id = ?1", params![id])?;
             conn.execute("DELETE FROM comments WHERE canvas_id = ?1", params![id])?;
             conn.execute("DELETE FROM assets WHERE canvas_id = ?1", params![id])?;
+            conn.execute("DELETE FROM webhooks WHERE canvas_id = ?1", params![id])?;
+            conn.execute("DELETE FROM board_cards WHERE canvas_id = ?1", params![id])?;
+            conn.execute("DELETE FROM automations WHERE canvas_id = ?1", params![id])?;
+            conn.execute("DELETE FROM data_sources WHERE canvas_id = ?1", params![id])?;
+            conn.execute("DELETE FROM sync_targets WHERE canvas_id = ?1", params![id])?;
             Ok(())
         })
     }
@@ -713,6 +766,325 @@ impl Store {
             Ok(())
         })
     }
+
+    // ---- board cards --------------------------------------------------------
+
+    pub fn cards(&self, canvas_id: &str) -> Result<Vec<BoardCard>> {
+        self.with(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, canvas_id, title, brief, role, status, frame_id, created_by, result,
+                        error, created_at, updated_at
+                 FROM board_cards WHERE canvas_id = ?1 ORDER BY created_at DESC",
+            )?;
+            let rows = stmt.query_map(params![canvas_id], row_to_card)?;
+            let mut out = Vec::new();
+            for row in rows {
+                out.push(row?);
+            }
+            Ok(out)
+        })
+    }
+
+    pub fn get_card(&self, id: &str) -> Result<Option<BoardCard>> {
+        self.with(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT id, canvas_id, title, brief, role, status, frame_id, created_by, result,
+                            error, created_at, updated_at FROM board_cards WHERE id = ?1",
+                    params![id],
+                    row_to_card,
+                )
+                .optional()?)
+        })
+    }
+
+    pub fn add_card(&self, card: &BoardCard) -> Result<()> {
+        self.with(|conn| {
+            conn.execute(
+                "INSERT INTO board_cards (id, canvas_id, title, brief, role, status, frame_id,
+                    created_by, result, error, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                params![
+                    card.id,
+                    card.canvas_id,
+                    card.title,
+                    card.brief,
+                    card.role.key(),
+                    card.status.key(),
+                    card.frame_id,
+                    card.created_by,
+                    card.result,
+                    card.error,
+                    card.created_at,
+                    card.updated_at,
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn save_card(&self, card: &BoardCard) -> Result<()> {
+        self.with(|conn| {
+            conn.execute(
+                "UPDATE board_cards SET title = ?2, brief = ?3, role = ?4, status = ?5,
+                    frame_id = ?6, result = ?7, error = ?8, updated_at = ?9 WHERE id = ?1",
+                params![
+                    card.id,
+                    card.title,
+                    card.brief,
+                    card.role.key(),
+                    card.status.key(),
+                    card.frame_id,
+                    card.result,
+                    card.error,
+                    now_ms(),
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn delete_card(&self, id: &str) -> Result<()> {
+        self.with(|conn| {
+            conn.execute("DELETE FROM board_cards WHERE id = ?1", params![id])?;
+            Ok(())
+        })
+    }
+
+    // ---- automations --------------------------------------------------------
+
+    pub fn automations(&self, canvas_id: &str) -> Result<Vec<Automation>> {
+        self.with(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, canvas_id, name, trigger, interval_minutes, brief, role, enabled,
+                        last_run_at, created_at
+                 FROM automations WHERE canvas_id = ?1 ORDER BY created_at",
+            )?;
+            let rows = stmt.query_map(params![canvas_id], |row| {
+                let trigger: String = row.get(3)?;
+                let role: String = row.get(6)?;
+                Ok(Automation {
+                    id: row.get(0)?,
+                    canvas_id: row.get(1)?,
+                    name: row.get(2)?,
+                    trigger: AutomationTrigger::parse(&trigger).unwrap_or_default(),
+                    interval_minutes: row.get(4)?,
+                    brief: row.get(5)?,
+                    role: CardRole::parse(&role).unwrap_or_default(),
+                    enabled: row.get::<_, i64>(7)? != 0,
+                    last_run_at: row.get(8)?,
+                    created_at: row.get(9)?,
+                })
+            })?;
+            let mut out = Vec::new();
+            for row in rows {
+                out.push(row?);
+            }
+            Ok(out)
+        })
+    }
+
+    pub fn add_automation(&self, automation: &Automation) -> Result<()> {
+        self.with(|conn| {
+            conn.execute(
+                "INSERT INTO automations (id, canvas_id, name, trigger, interval_minutes, brief,
+                    role, enabled, last_run_at, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
+                    automation.id,
+                    automation.canvas_id,
+                    automation.name,
+                    automation.trigger.key(),
+                    automation.interval_minutes,
+                    automation.brief,
+                    automation.role.key(),
+                    if automation.enabled { 1 } else { 0 },
+                    automation.last_run_at,
+                    automation.created_at,
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn save_automation(&self, automation: &Automation) -> Result<()> {
+        self.with(|conn| {
+            conn.execute(
+                "UPDATE automations SET name = ?2, trigger = ?3, interval_minutes = ?4, brief = ?5,
+                    role = ?6, enabled = ?7, last_run_at = ?8 WHERE id = ?1",
+                params![
+                    automation.id,
+                    automation.name,
+                    automation.trigger.key(),
+                    automation.interval_minutes,
+                    automation.brief,
+                    automation.role.key(),
+                    if automation.enabled { 1 } else { 0 },
+                    automation.last_run_at,
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn delete_automation(&self, id: &str) -> Result<()> {
+        self.with(|conn| {
+            conn.execute("DELETE FROM automations WHERE id = ?1", params![id])?;
+            Ok(())
+        })
+    }
+
+    // ---- data sources -------------------------------------------------------
+
+    pub fn data_sources(&self, canvas_id: &str) -> Result<Vec<DataSource>> {
+        self.with(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, canvas_id, name, kind, path, updated_at FROM data_sources
+                 WHERE canvas_id = ?1 ORDER BY name",
+            )?;
+            let rows = stmt.query_map(params![canvas_id], |row| {
+                let kind: String = row.get(3)?;
+                Ok(DataSource {
+                    id: row.get(0)?,
+                    canvas_id: row.get(1)?,
+                    name: row.get(2)?,
+                    kind: SourceKind::parse(&kind).unwrap_or_default(),
+                    path: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            })?;
+            let mut out = Vec::new();
+            for row in rows {
+                out.push(row?);
+            }
+            Ok(out)
+        })
+    }
+
+    pub fn get_data_source(&self, id: &str) -> Result<Option<DataSource>> {
+        self.with(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT id, canvas_id, name, kind, path, updated_at FROM data_sources WHERE id = ?1",
+                    params![id],
+                    |row| {
+                        let kind: String = row.get(3)?;
+                        Ok(DataSource {
+                            id: row.get(0)?,
+                            canvas_id: row.get(1)?,
+                            name: row.get(2)?,
+                            kind: SourceKind::parse(&kind).unwrap_or_default(),
+                            path: row.get(4)?,
+                            updated_at: row.get(5)?,
+                        })
+                    },
+                )
+                .optional()?)
+        })
+    }
+
+    pub fn add_data_source(&self, source: &DataSource) -> Result<()> {
+        self.with(|conn| {
+            conn.execute(
+                "INSERT INTO data_sources (id, canvas_id, name, kind, path, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    source.id,
+                    source.canvas_id,
+                    source.name,
+                    source.kind.key(),
+                    source.path,
+                    source.updated_at,
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn touch_data_source(&self, id: &str) -> Result<()> {
+        self.with(|conn| {
+            conn.execute(
+                "UPDATE data_sources SET updated_at = ?2 WHERE id = ?1",
+                params![id, now_ms()],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn delete_data_source(&self, id: &str) -> Result<()> {
+        self.with(|conn| {
+            conn.execute("DELETE FROM data_sources WHERE id = ?1", params![id])?;
+            Ok(())
+        })
+    }
+
+    // ---- sync targets -------------------------------------------------------
+
+    pub fn sync_targets(&self, canvas_id: &str) -> Result<Vec<SyncTarget>> {
+        self.with(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, canvas_id, frame_id, selector, path, kind, last_synced_at, created_at
+                 FROM sync_targets WHERE canvas_id = ?1 ORDER BY created_at",
+            )?;
+            let rows = stmt.query_map(params![canvas_id], row_to_sync)?;
+            let mut out = Vec::new();
+            for row in rows {
+                out.push(row?);
+            }
+            Ok(out)
+        })
+    }
+
+    pub fn get_sync_target(&self, id: &str) -> Result<Option<SyncTarget>> {
+        self.with(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT id, canvas_id, frame_id, selector, path, kind, last_synced_at, created_at
+                     FROM sync_targets WHERE id = ?1",
+                    params![id],
+                    row_to_sync,
+                )
+                .optional()?)
+        })
+    }
+
+    pub fn add_sync_target(&self, target: &SyncTarget) -> Result<()> {
+        self.with(|conn| {
+            conn.execute(
+                "INSERT INTO sync_targets (id, canvas_id, frame_id, selector, path, kind,
+                    last_synced_at, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    target.id,
+                    target.canvas_id,
+                    target.frame_id,
+                    target.selector,
+                    target.path,
+                    target.kind.key(),
+                    target.last_synced_at,
+                    target.created_at,
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn touch_sync_target(&self, id: &str) -> Result<()> {
+        self.with(|conn| {
+            conn.execute(
+                "UPDATE sync_targets SET last_synced_at = ?2 WHERE id = ?1",
+                params![id, now_ms()],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn delete_sync_target(&self, id: &str) -> Result<()> {
+        self.with(|conn| {
+            conn.execute("DELETE FROM sync_targets WHERE id = ?1", params![id])?;
+            Ok(())
+        })
+    }
 }
 
 fn approval_key(approval: Approval) -> &'static str {
@@ -729,6 +1101,39 @@ fn approval_from(value: &str) -> Approval {
         "needs_review" => Approval::NeedsReview,
         _ => Approval::Draft,
     }
+}
+
+fn row_to_card(row: &rusqlite::Row<'_>) -> rusqlite::Result<BoardCard> {
+    let role: String = row.get(4)?;
+    let status: String = row.get(5)?;
+    Ok(BoardCard {
+        id: row.get(0)?,
+        canvas_id: row.get(1)?,
+        title: row.get(2)?,
+        brief: row.get(3)?,
+        role: CardRole::parse(&role).unwrap_or_default(),
+        status: CardStatus::parse(&status).unwrap_or_default(),
+        frame_id: row.get(6)?,
+        created_by: row.get(7)?,
+        result: row.get(8)?,
+        error: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
+    })
+}
+
+fn row_to_sync(row: &rusqlite::Row<'_>) -> rusqlite::Result<SyncTarget> {
+    let kind: String = row.get(5)?;
+    Ok(SyncTarget {
+        id: row.get(0)?,
+        canvas_id: row.get(1)?,
+        frame_id: row.get(2)?,
+        selector: row.get(3)?,
+        path: row.get(4)?,
+        kind: SyncKind::parse(&kind).unwrap_or_default(),
+        last_synced_at: row.get(6)?,
+        created_at: row.get(7)?,
+    })
 }
 
 fn row_to_frame(row: &rusqlite::Row<'_>) -> rusqlite::Result<Frame> {
@@ -839,6 +1244,68 @@ mod tests {
         let loaded = store.get_comment(&comment.id).unwrap().unwrap();
         assert!(loaded.resolved);
         assert_eq!(loaded.replies.len(), 1);
+    }
+
+    #[test]
+    fn board_cards_and_automations_round_trip() {
+        let store = store();
+        let canvas = store.create_canvas("Canvas").unwrap();
+        let mut card = BoardCard::new(&canvas.id, "Tighten the hero", "More air", CardRole::Design);
+        card.created_by = "@design".into();
+        store.add_card(&card).unwrap();
+        card.status = CardStatus::Done;
+        card.result = Some("done".into());
+        store.save_card(&card).unwrap();
+        let loaded = store.get_card(&card.id).unwrap().unwrap();
+        assert_eq!(loaded.status, CardStatus::Done);
+        assert_eq!(loaded.role, CardRole::Design);
+        assert_eq!(store.cards(&canvas.id).unwrap().len(), 1);
+
+        let mut automation = Automation::new(&canvas.id, "Nightly", "Audit spacing");
+        automation.trigger = AutomationTrigger::Schedule;
+        automation.interval_minutes = Some(60);
+        automation.role = CardRole::Review;
+        store.add_automation(&automation).unwrap();
+        let automations = store.automations(&canvas.id).unwrap();
+        assert_eq!(automations.len(), 1);
+        assert_eq!(automations[0].role, CardRole::Review);
+        assert_eq!(automations[0].interval_minutes, Some(60));
+        store.delete_card(&card.id).unwrap();
+        assert!(store.cards(&canvas.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn data_sources_and_sync_targets_round_trip() {
+        let store = store();
+        let canvas = store.create_canvas("Canvas").unwrap();
+        let source = DataSource {
+            id: new_id(),
+            canvas_id: canvas.id.clone(),
+            name: "pricing".into(),
+            kind: SourceKind::Json,
+            path: "/tmp/pricing.json".into(),
+            updated_at: now_ms(),
+        };
+        store.add_data_source(&source).unwrap();
+        assert_eq!(store.data_sources(&canvas.id).unwrap()[0].name, "pricing");
+
+        let target = SyncTarget {
+            id: new_id(),
+            canvas_id: canvas.id.clone(),
+            frame_id: "frame".into(),
+            selector: "#headline".into(),
+            path: "/tmp/site/index.html".into(),
+            kind: SyncKind::Text,
+            last_synced_at: None,
+            created_at: now_ms(),
+        };
+        store.add_sync_target(&target).unwrap();
+        let loaded = store.get_sync_target(&target.id).unwrap().unwrap();
+        assert_eq!(loaded.selector, "#headline");
+        store.touch_sync_target(&target.id).unwrap();
+        assert!(store.get_sync_target(&target.id).unwrap().unwrap().last_synced_at.is_some());
+        store.delete_sync_target(&target.id).unwrap();
+        assert!(store.sync_targets(&canvas.id).unwrap().is_empty());
     }
 
     #[test]

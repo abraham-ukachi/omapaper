@@ -52,6 +52,9 @@ const state = {
   activities: [],
   followingPeerId: null,
   webhooks: [],
+  cards: [],
+  automations: [],
+  agent: { configured: false },
   lastCursor: 0,
 };
 
@@ -155,6 +158,7 @@ async function loadCanvas(id) {
   renderAll();
   renderDashboard();
   loadWebhooks();
+  loadAgents();
   if (state.ws && state.ws.readyState === 1) state.ws.close();
   connect();
 }
@@ -1064,6 +1068,215 @@ function renderWebhooks() {
   }
 }
 
+async function loadAgents() {
+  if (!state.canvasId) return;
+  try {
+    const [cards, automations, agent] = await Promise.all([
+      api(`/api/canvases/${state.canvasId}/cards`),
+      api(`/api/canvases/${state.canvasId}/automations`),
+      api("/api/agent").catch(() => ({ configured: false })),
+    ]);
+    state.cards = cards || [];
+    state.automations = automations || [];
+    state.agent = agent || { configured: false };
+    renderAgents();
+  } catch {
+    /* ignore */
+  }
+}
+
+function renderAgents() {
+  const status = $("#agentStatus");
+  if (!status) return;
+  const agent = state.agent || {};
+  status.innerHTML = agent.configured
+    ? `runner on · <b>${escapeHtml(agent.model || "model")}</b> · ${escapeHtml(agent.baseUrl || "")}`
+    : `runner off · set <b>OMAPAPER_AGENT_API_KEY</b> and restart omapaperd`;
+
+  const frameSelect = $("#cardFrame");
+  if (frameSelect) {
+    const chosen = frameSelect.value;
+    frameSelect.innerHTML = `<option value="">none</option>`;
+    for (const frame of state.frames) {
+      const option = document.createElement("option");
+      option.value = frame.id;
+      option.textContent = frame.name;
+      frameSelect.appendChild(option);
+    }
+    frameSelect.value = state.frames.some((frame) => frame.id === chosen)
+      ? chosen
+      : state.selectedFrameId || "";
+  }
+
+  const list = $("#cardList");
+  if (list) {
+    list.innerHTML = "";
+    if (!state.cards.length) {
+      list.innerHTML = `<p class="muted small">No tasks yet. Write a brief above, or @mention a role in a comment.</p>`;
+    }
+    for (const card of state.cards) {
+      const row = document.createElement("div");
+      row.className = "comment";
+      row.innerHTML = `<div class="chead"><b>${escapeHtml(card.title)}</b><span class="pill role">${escapeHtml(card.role)}</span><span class="pill ${escapeHtml(card.status)}">${escapeHtml(card.status)}</span></div>
+        <p class="cbody">${escapeHtml(card.brief)}</p>
+        ${card.result ? `<p class="cbody muted small">${escapeHtml(card.result)}</p>` : ""}
+        ${card.error ? `<p class="cbody small">${escapeHtml(card.error)}</p>` : ""}
+        <div class="chead"><span class="muted small">${escapeHtml(card.createdBy || "you")}${card.frameId ? " · frame" : ""}</span></div>`;
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      if (state.agent?.configured && card.status !== "working") {
+        const run = document.createElement("button");
+        run.className = "ghost small";
+        run.textContent = card.status === "done" ? "Run again" : "Run";
+        run.onclick = () => runCard(card.id);
+        actions.appendChild(run);
+      }
+      if (card.status !== "done") {
+        const done = document.createElement("button");
+        done.className = "ghost small";
+        done.textContent = "Done";
+        done.onclick = () => updateCard(card.id, { status: "done" });
+        actions.appendChild(done);
+      }
+      const remove = document.createElement("button");
+      remove.className = "danger small";
+      remove.textContent = "Remove";
+      remove.onclick = () => removeCard(card.id);
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      list.appendChild(row);
+    }
+  }
+
+  const automations = $("#automationList");
+  if (automations) {
+    automations.innerHTML = "";
+    if (!state.automations.length) {
+      automations.innerHTML = `<p class="muted small">No automations yet.</p>`;
+    }
+    for (const automation of state.automations) {
+      const row = document.createElement("div");
+      row.className = "comment";
+      const every = automation.intervalMinutes ? ` · every ${automation.intervalMinutes}m` : "";
+      row.innerHTML = `<div class="chead"><b>${escapeHtml(automation.name)}</b><span class="pill role">${escapeHtml(automation.role)}</span></div>
+        <p class="cbody">${escapeHtml(automation.trigger.replace(/_/g, " "))}${every} · ${escapeHtml(automation.brief)}</p>`;
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const toggle = document.createElement("button");
+      toggle.className = "ghost small";
+      toggle.textContent = automation.enabled ? "Pause" : "Resume";
+      toggle.onclick = () => updateAutomation(automation, { enabled: !automation.enabled });
+      actions.appendChild(toggle);
+      const remove = document.createElement("button");
+      remove.className = "danger small";
+      remove.textContent = "Remove";
+      remove.onclick = () => removeAutomation(automation.id);
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      automations.appendChild(row);
+    }
+  }
+}
+
+async function addCard() {
+  const brief = $("#cardBrief").value.trim();
+  if (!brief) {
+    toast("Write a brief first", true);
+    return;
+  }
+  try {
+    await api(`/api/canvases/${state.canvasId}/cards`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: $("#cardTitle").value.trim(),
+        brief,
+        role: $("#cardRole").value,
+        frameId: $("#cardFrame").value || null,
+        author: state.name,
+      }),
+    });
+    $("#cardTitle").value = "";
+    $("#cardBrief").value = "";
+    await loadAgents();
+    toast("Task queued");
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function runCard(id) {
+  try {
+    await api(`/api/cards/${id}/run`, { method: "POST" });
+    toast("Runner started");
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function updateCard(id, patch) {
+  try {
+    await api(`/api/cards/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    await loadAgents();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function removeCard(id) {
+  try {
+    await api(`/api/cards/${id}`, { method: "DELETE" });
+    await loadAgents();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function addAutomation() {
+  const name = $("#automationName").value.trim();
+  const brief = $("#automationBrief").value.trim();
+  if (!name || !brief) {
+    toast("An automation needs a name and a brief", true);
+    return;
+  }
+  const trigger = $("#automationTrigger").value;
+  try {
+    await api(`/api/canvases/${state.canvasId}/automations`, {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+        brief,
+        trigger,
+        role: $("#automationRole").value,
+        intervalMinutes: trigger === "schedule" ? Number($("#automationInterval").value) || 30 : null,
+      }),
+    });
+    $("#automationName").value = "";
+    $("#automationBrief").value = "";
+    await loadAgents();
+    toast("Automation added");
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function updateAutomation(automation, patch) {
+  try {
+    await api(`/api/automations/${automation.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    await loadAgents();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function removeAutomation(id) {
+  try {
+    await api(`/api/automations/${id}`, { method: "DELETE" });
+    await loadAgents();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 function renderCursors() {
   const layer = $("#cursorLayer");
   layer.innerHTML = "";
@@ -1182,6 +1395,23 @@ function handleEvent(event) {
         store.set("frame", state.selectedFrameId);
       }
       renderAll();
+      break;
+    case "card.created":
+      addActivity(`Task queued: ${event.card?.title || "untitled"} (${event.card?.role || "design"})`);
+      loadAgents().catch(() => {});
+      break;
+    case "card.updated": {
+      const index = state.cards.findIndex((card) => card.id === event.card?.id);
+      if (index >= 0) state.cards[index] = { ...state.cards[index], ...event.card };
+      else if (event.card) state.cards.unshift(event.card);
+      renderAgents();
+      if (event.card?.status === "done") addActivity(`Task done: ${event.card.title}`);
+      if (event.card?.status === "failed") addActivity(`Task failed: ${event.card.title}`);
+      break;
+    }
+    case "card.deleted":
+      state.cards = state.cards.filter((card) => card.id !== event.cardId);
+      renderAgents();
       break;
     case "canvas.updated":
       if (event.canvas.id === state.canvasId) {
@@ -1719,7 +1949,7 @@ function applyZoom() {
 function setTab(tab) {
   state.tab = tab;
   for (const button of $$(".tab")) button.classList.toggle("active", button.dataset.tab === tab);
-  for (const pane of ["dashboard", "inspect", "tokens", "comments", "activity", "taste", "webhooks"]) {
+  for (const pane of ["dashboard", "inspect", "tokens", "comments", "activity", "taste", "webhooks", "agents"]) {
     const element = $(`#pane-${pane}`);
     if (element) element.hidden = pane !== tab;
   }
@@ -1727,6 +1957,7 @@ function setTab(tab) {
   if (tab === "activity") renderActivity();
   if (tab === "taste") renderTaste();
   if (tab === "webhooks") renderWebhooks();
+  if (tab === "agents") renderAgents();
 }
 
 function openPlay(frameId = state.selectedFrameId) {
@@ -1980,6 +2211,12 @@ function bind() {
     }
   };
 
+  $("#addCard").onclick = addCard;
+  $("#addAutomation").onclick = addAutomation;
+  $("#cardBrief").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) addCard();
+  });
+
   $("#addWebhook").onclick = async () => {
     const url = $("#webhookUrl").value.trim();
     if (!url) return;
@@ -2000,7 +2237,7 @@ function bind() {
 
   if (state.readonly) {
     document.body.classList.add("readonly");
-    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#newPageBtn", "#duplicateCanvasBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment"]) {
+    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#newPageBtn", "#duplicateCanvasBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment", "#addCard", "#addAutomation"]) {
       const element = $(selector);
       if (element) element.hidden = true;
     }

@@ -11,8 +11,10 @@ use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use omapaper_core::html;
+use crate::workflow;
 use omapaper_core::model::{
-    color_for, new_id, now_ms, Approval, Canvas, Comment, Frame, Peer, PeerKind, Reply, Selection,
+    color_for, new_id, now_ms, Approval, Automation, AutomationTrigger, BoardCard, Canvas, CardRole,
+    CardStatus, Comment, Frame, Peer, PeerKind, Reply, Selection,
 };
 use omapaper_core::{render, theme::Theme, tokens, API_VERSION, Health, VERSION};
 use omapaper_mcp::Host;
@@ -87,6 +89,24 @@ pub fn router(app: Shared) -> Router {
             get(list_webhooks).post(create_webhook),
         )
         .route("/api/webhooks/{id}", axum::routing::delete(delete_webhook))
+        .route("/api/agent", get(agent_status))
+        .route(
+            "/api/canvases/{id}/cards",
+            get(list_cards).post(create_card),
+        )
+        .route(
+            "/api/cards/{id}",
+            patch(patch_card).delete(delete_card),
+        )
+        .route("/api/cards/{id}/run", post(run_card))
+        .route(
+            "/api/canvases/{id}/automations",
+            get(list_automations).post(create_automation),
+        )
+        .route(
+            "/api/automations/{id}",
+            patch(patch_automation).delete(delete_automation),
+        )
         .route(
             "/api/canvases/{id}/presence",
             get(get_presence).post(post_presence),
@@ -106,6 +126,7 @@ pub fn router(app: Shared) -> Router {
             post(restore_version),
         )
         .route("/api/frames/{id}/screenshot", get(frame_screenshot))
+        .route("/api/frames/{id}/svg", post(insert_frame_svg))
         .route("/api/frames/{id}/export", get(frame_export))
         .route("/i/{filename}", get(live_image))
         .route("/api/comments/{id}", patch(patch_comment))
@@ -679,11 +700,21 @@ async fn patch_frame(
     if let Some(locked) = body.locked {
         frame.locked = locked;
     }
+    let mut approved_now = false;
     if let Some(value) = body.approval {
         frame.approval = approval(&value)?;
         frame.approval_by = Some("You".into());
+        approved_now = frame.approval == Approval::ReadyForDev;
     }
     app.host.store.save_frame(&frame)?;
+    if approved_now {
+        workflow::fire_automations(
+            &app,
+            &frame.canvas_id,
+            AutomationTrigger::FrameApproved,
+            &format!("`{}` is ready for dev.", frame.name),
+        );
+    }
     app.host.touch_canvas(&frame.canvas_id);
     app.live
         .send(json!({"type": "frame.updated", "frame": frame}));
@@ -890,6 +921,38 @@ async fn frame_export(
         .into_response())
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NewSvg {
+    svg: String,
+    x: Option<f64>,
+    y: Option<f64>,
+    width: Option<f64>,
+    height: Option<f64>,
+    name: Option<String>,
+}
+
+async fn insert_frame_svg(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(body): Json<NewSvg>,
+) -> ApiResult<Json<Frame>> {
+    let frame = workflow::insert_svg(
+        &app,
+        &id,
+        &workflow::SvgLayer {
+            svg: &body.svg,
+            x: body.x.unwrap_or(0.0),
+            y: body.y.unwrap_or(0.0),
+            width: body.width.unwrap_or(0.0),
+            height: body.height.unwrap_or(0.0),
+            name: body.name.as_deref(),
+        },
+    )
+    .map_err(ApiError::bad)?;
+    Ok(Json(frame))
+}
+
 // ---- webhooks -------------------------------------------------------------
 
 async fn list_webhooks(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
@@ -920,6 +983,229 @@ async fn delete_webhook(State(app): State<Shared>, Path(id): Path<String>) -> Ap
     Ok(StatusCode::NO_CONTENT)
 }
 
+// ---- agent board ----------------------------------------------------------
+
+async fn agent_status() -> Json<Value> {
+    match omapaper_core::agent::AgentConfig::from_env() {
+        Some(config) => Json(json!({
+            "configured": true,
+            "model": config.model,
+            "baseUrl": config.base_url,
+            "keyVar": "OMAPAPER_AGENT_API_KEY",
+        })),
+        None => Json(json!({
+            "configured": false,
+            "model": null,
+            "baseUrl": null,
+            "keyVar": "OMAPAPER_AGENT_API_KEY",
+        })),
+    }
+}
+
+async fn list_cards(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+    Ok(Json(json!(app.host.store.cards(&id)?)))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NewCard {
+    title: Option<String>,
+    brief: String,
+    role: Option<String>,
+    frame_id: Option<String>,
+    author: Option<String>,
+}
+
+async fn create_card(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(body): Json<NewCard>,
+) -> ApiResult<Json<BoardCard>> {
+    let role = match body.role.as_deref() {
+        Some(value) => CardRole::parse(value)
+            .ok_or_else(|| ApiError::bad(format!("unknown role `{value}`")))?,
+        None => CardRole::default(),
+    };
+    let title = body
+        .title
+        .filter(|title| !title.trim().is_empty())
+        .unwrap_or_else(|| workflow::title_from(&body.brief));
+    let card = workflow::queue_card(
+        &app,
+        &id,
+        &title,
+        &body.brief,
+        role,
+        body.frame_id,
+        body.author.as_deref().unwrap_or("You"),
+    )?;
+    Ok(Json(card))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PatchCard {
+    title: Option<String>,
+    brief: Option<String>,
+    status: Option<String>,
+    role: Option<String>,
+    result: Option<String>,
+}
+
+async fn patch_card(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(body): Json<PatchCard>,
+) -> ApiResult<Json<BoardCard>> {
+    let mut card = app
+        .host
+        .store
+        .get_card(&id)?
+        .ok_or_else(|| ApiError::not_found(format!("no card `{id}`")))?;
+    if let Some(title) = body.title {
+        card.title = title;
+    }
+    if let Some(brief) = body.brief {
+        card.brief = brief;
+    }
+    if let Some(status) = body.status.as_deref() {
+        card.status = CardStatus::parse(status)
+            .ok_or_else(|| ApiError::bad(format!("unknown status `{status}`")))?;
+        if card.status != CardStatus::Failed {
+            card.error = None;
+        }
+    }
+    if let Some(role) = body.role.as_deref() {
+        card.role = CardRole::parse(role)
+            .ok_or_else(|| ApiError::bad(format!("unknown role `{role}`")))?;
+    }
+    if let Some(result) = body.result {
+        card.result = Some(result);
+    }
+    app.host.store.save_card(&card)?;
+    app.live.send(json!({
+        "type": "card.updated",
+        "canvasId": card.canvas_id,
+        "card": card,
+    }));
+    Ok(Json(card))
+}
+
+async fn delete_card(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<StatusCode> {
+    let card = app
+        .host
+        .store
+        .get_card(&id)?
+        .ok_or_else(|| ApiError::not_found(format!("no card `{id}`")))?;
+    app.host.store.delete_card(&id)?;
+    app.live.send(json!({
+        "type": "card.deleted",
+        "canvasId": card.canvas_id,
+        "cardId": id,
+    }));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn run_card(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<Json<BoardCard>> {
+    let card = app
+        .host
+        .store
+        .get_card(&id)?
+        .ok_or_else(|| ApiError::not_found(format!("no card `{id}`")))?;
+    if omapaper_core::agent::AgentConfig::from_env().is_none() {
+        return Err(ApiError::bad(
+            "no agent key: set OMAPAPER_AGENT_API_KEY (or OPENAI_API_KEY) and restart omapaperd",
+        ));
+    }
+    tokio::spawn(workflow::run_card(app.clone(), id));
+    Ok(Json(card))
+}
+
+// ---- automations ----------------------------------------------------------
+
+async fn list_automations(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(json!(app.host.store.automations(&id)?)))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NewAutomation {
+    name: String,
+    brief: String,
+    trigger: Option<String>,
+    role: Option<String>,
+    interval_minutes: Option<i64>,
+}
+
+async fn create_automation(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(body): Json<NewAutomation>,
+) -> ApiResult<Json<Automation>> {
+    let mut automation = Automation::new(&id, body.name, body.brief);
+    if let Some(trigger) = body.trigger.as_deref() {
+        automation.trigger = AutomationTrigger::parse(trigger)
+            .ok_or_else(|| ApiError::bad(format!("unknown trigger `{trigger}`")))?;
+    }
+    if let Some(role) = body.role.as_deref() {
+        automation.role = CardRole::parse(role)
+            .ok_or_else(|| ApiError::bad(format!("unknown role `{role}`")))?;
+    }
+    automation.interval_minutes = body.interval_minutes.filter(|minutes| *minutes > 0);
+    if automation.trigger == AutomationTrigger::Schedule && automation.interval_minutes.is_none() {
+        return Err(ApiError::bad("a scheduled automation needs `intervalMinutes`"));
+    }
+    app.host.store.add_automation(&automation)?;
+    Ok(Json(automation))
+}
+
+#[derive(Deserialize)]
+struct PatchAutomation {
+    enabled: Option<bool>,
+    brief: Option<String>,
+}
+
+async fn patch_automation(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(body): Json<PatchAutomation>,
+) -> ApiResult<Json<Value>> {
+    let mut found: Option<Automation> = None;
+    for canvas in app.host.store.list_canvases()? {
+        if let Some(automation) = app
+            .host
+            .store
+            .automations(&canvas.id)?
+            .into_iter()
+            .find(|automation| automation.id == id)
+        {
+            found = Some(automation);
+            break;
+        }
+    }
+    let mut automation =
+        found.ok_or_else(|| ApiError::not_found(format!("no automation `{id}`")))?;
+    if let Some(enabled) = body.enabled {
+        automation.enabled = enabled;
+    }
+    if let Some(brief) = body.brief {
+        automation.brief = brief;
+    }
+    app.host.store.save_automation(&automation)?;
+    Ok(Json(json!(automation)))
+}
+
+async fn delete_automation(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+) -> ApiResult<StatusCode> {
+    app.host.store.delete_automation(&id)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 // ---- comments -------------------------------------------------------------
 
 async fn list_comments(
@@ -941,7 +1227,7 @@ struct NewComment {
     author: Option<String>,
 }
 
-fn dispatch_webhooks(app: Shared, canvas_id: String, event: &'static str, payload: Value) {
+pub(crate) fn dispatch_webhooks(app: Shared, canvas_id: String, event: &'static str, payload: Value) {
     let webhooks = app.host.store.webhooks(&canvas_id).unwrap_or_default();
     for webhook in webhooks {
         if !webhook.events.is_empty() && !webhook.events.iter().any(|e| e == event) {
@@ -977,6 +1263,23 @@ async fn create_comment(
         replies: Vec::new(),
     };
     app.host.store.add_comment(&comment)?;
+    if let Some(role) = workflow::mention_role(&comment.body) {
+        let _ = workflow::queue_card(
+            &app,
+            &comment.canvas_id,
+            &workflow::title_from(&comment.body),
+            &comment.body,
+            role,
+            comment.frame_id.clone(),
+            &format!("@{}", role.key()),
+        );
+    }
+    workflow::fire_automations(
+        &app,
+        &comment.canvas_id,
+        AutomationTrigger::CommentCreated,
+        &format!("New comment from {}: {}", comment.author, comment.body),
+    );
     let canvas_id = comment.canvas_id.clone();
     dispatch_webhooks(app.clone(), canvas_id, "comment.created", json!(comment.clone()));
     app.live

@@ -11,6 +11,7 @@ pub const TOPICS: &[&str] = &[
     "tokens",
     "prototypes",
     "comments",
+    "board",
 ];
 
 pub const INSTRUCTIONS: &str = r##"OmaPaper is a local-first design canvas for humans and AI agents. A canvas holds pages; a page holds frames; each frame is one complete HTML document that renders live, for everyone looking at the canvas, the moment you write it.
@@ -30,6 +31,7 @@ You are a designer here, not a code generator: design on the canvas, review with
 - Prototypes: wire elements with data-omapaper-on="click" and data-omapaper-action="frame:<frame-id>" (or "back", "url:<href>"), then open the canvas in Play mode.
 - Comments: get_comments reads threads (element or point anchored); reply_to_comment answers, resolve_comment closes.
 - Approval: update_frame sets approval to draft, needs_review or ready_for_dev. HTML or size edits drop a frame back to draft, so only ready_for_dev is current sign-off.
+- Board: list_board_cards reads the task board, create_board_card queues work for a specialist (design, copy, code, review, research), update_board_card claims or finishes it. A human @mentions a role in a comment to queue the same thing.
 - History: list_frame_versions / restore_frame_version bring back an earlier state when a human asks for it or a rework turned out worse.
 - Assets: export_frame writes html, png or pdf next to the daemon's data directory. Never inline images as data: URIs — put files on the canvas and reference the returned URL.
 - Say what you did in one short line when you finish, then call finish_working: it clears your cursor and status for the humans watching.
@@ -75,6 +77,14 @@ pub const PROTOTYPES: &str = r##"Clickable prototypes are attributes, not a sepa
 Actions: frame:<id> (navigate), back, url:<href>, overlay:<id>. Events: click, hover, press.
 Play mode follows them with a back stack. Designers can click through in the canvas toolbar."##;
 
+pub const BOARD: &str = r##"The board is how a canvas hands work around between humans and specialists.
+
+- Roles: design (layout, hierarchy, type), copy (interface writing), code (semantic HTML/CSS), review (audit against guidelines), research (structure and states).
+- A card has a title, a brief and an optional frame. Humans queue cards from the Agents tab or with an @design / @copy / @code / @review / @research mention in a comment.
+- list_board_cards shows what is queued and who is on it. Claim a card with update_board_card status="working", then finish it with status="done" and a one-line result.
+- A card can be run by the built-in runner (Agents tab › Run) when this machine has OMAPAPER_AGENT_API_KEY set. Otherwise work it yourself with the frame tools.
+- Automations queue cards on a trigger: a new comment, a frame marked ready_for_dev, or every N minutes."##;
+
 pub const COMMENTS: &str = r##"Comments are threads anchored to an element (frame_id + element_id) or to a point (page_id + x, y).
 
 - get_comments lists them; replies include their author and time.
@@ -89,6 +99,7 @@ pub fn topic(name: &str) -> &'static str {
         "tokens" => TOKENS,
         "prototypes" => PROTOTYPES,
         "comments" => COMMENTS,
+        "board" => BOARD,
         _ => INSTRUCTIONS,
     }
 }

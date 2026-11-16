@@ -5,6 +5,7 @@
 
 mod api;
 mod live;
+mod workflow;
 
 use live::Live;
 use omapaper_core::{theme::Theme, Store};
@@ -149,6 +150,17 @@ async fn main() {
                     }
                 }
                 last = current;
+            }
+        });
+    }
+
+    // Scheduled automations: one tick a minute, queueing cards that are due.
+    {
+        let app = app.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                workflow::scheduled_tick(&app);
             }
         });
     }

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.10.0-beta.1] - 2026-11-16
+
+### Added
+- :robot: Built-in agent runner: an OpenAI-compatible endpoint (`OMAPAPER_AGENT_API_KEY`, `OMAPAPER_AGENT_BASE_URL`, `OMAPAPER_AGENT_MODEL`) turns a brief into frame HTML.
+- :clipboard: Agent board: cards with a specialist role (design, copy, code, review, research), status, result, and Run/Done/Remove in the new Agents tab.
+- :speech_balloon: `@design` / `@copy` / `@code` / `@review` / `@research` in a comment queues a card for that role.
+- :repeat: Automations: queue a card when a comment arrives, when a frame is ready for dev, or every N minutes (goal: the daemon ticks once a minute).
+- :toolbox: MCP tools `list_board_cards`, `create_board_card`, `update_board_card`, and a `board` guide topic.
+- :art: `POST /api/frames/{id}/svg` inserts a generated SVG as a positioned layer.
+
+### Notes
+- Beta release. Pulling real data into frames and pushing copy back to a codebase land in 0.11.
+
 ## [0.9.0-beta.1] - 2026-11-16
 
 ### Added

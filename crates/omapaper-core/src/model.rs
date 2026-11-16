@@ -88,6 +88,19 @@ pub enum TokenKind {
     Other,
 }
 
+impl TokenKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            TokenKind::Color => "color",
+            TokenKind::Spacing => "spacing",
+            TokenKind::Radius => "radius",
+            TokenKind::Typography => "typography",
+            TokenKind::Shadow => "shadow",
+            TokenKind::Other => "other",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Token {
@@ -146,6 +159,315 @@ pub struct Webhook {
     pub url: String,
     #[serde(default)]
     pub events: Vec<String>,
+    pub created_at: i64,
+}
+
+/// A specialist an agent task is handed to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CardRole {
+    #[default]
+    Design,
+    Copy,
+    Code,
+    Review,
+    Research,
+}
+
+impl CardRole {
+    pub fn key(self) -> &'static str {
+        match self {
+            CardRole::Design => "design",
+            CardRole::Copy => "copy",
+            CardRole::Code => "code",
+            CardRole::Review => "review",
+            CardRole::Research => "research",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<CardRole> {
+        match value.trim().trim_start_matches('@') {
+            "design" => Some(CardRole::Design),
+            "copy" => Some(CardRole::Copy),
+            "code" => Some(CardRole::Code),
+            "review" => Some(CardRole::Review),
+            "research" => Some(CardRole::Research),
+            _ => None,
+        }
+    }
+
+    /// The line the runner puts in the system prompt.
+    pub fn persona(self) -> &'static str {
+        match self {
+            CardRole::Design => {
+                "You are a product designer. You shape screens on the canvas: layout, hierarchy, spacing and type."
+            }
+            CardRole::Copy => {
+                "You are a copywriter who works inside designs. You write short, plain, specific interface copy and never invent claims."
+            }
+            CardRole::Code => {
+                "You are a front-end engineer. You write semantic HTML and CSS that mirrors the design, and you keep every data-op-id intact."
+            }
+            CardRole::Review => {
+                "You are a design reviewer. You audit the work against the canvas guidelines and say what to change, in order."
+            }
+            CardRole::Research => {
+                "You are a product researcher. You turn a brief into structure: sections, states, and the questions a design must answer."
+            }
+        }
+    }
+}
+
+/// Where a board card stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CardStatus {
+    #[default]
+    Queued,
+    Working,
+    Done,
+    Failed,
+}
+
+impl CardStatus {
+    pub fn key(self) -> &'static str {
+        match self {
+            CardStatus::Queued => "queued",
+            CardStatus::Working => "working",
+            CardStatus::Done => "done",
+            CardStatus::Failed => "failed",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<CardStatus> {
+        match value {
+            "queued" => Some(CardStatus::Queued),
+            "working" => Some(CardStatus::Working),
+            "done" => Some(CardStatus::Done),
+            "failed" => Some(CardStatus::Failed),
+            _ => None,
+        }
+    }
+}
+
+/// One task on a canvas board: a brief, the specialist it is for, and what
+/// came back. Cards are queued by a human, an @mention or an automation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoardCard {
+    pub id: String,
+    pub canvas_id: String,
+    pub title: String,
+    pub brief: String,
+    #[serde(default)]
+    pub role: CardRole,
+    #[serde(default)]
+    pub status: CardStatus,
+    /// The frame the card works on, when it has one.
+    #[serde(default)]
+    pub frame_id: Option<String>,
+    /// `You`, `@design`, `automation:Name` — who asked.
+    #[serde(default)]
+    pub created_by: String,
+    #[serde(default)]
+    pub result: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl BoardCard {
+    pub fn new(canvas_id: &str, title: impl Into<String>, brief: impl Into<String>, role: CardRole) -> BoardCard {
+        let now = now_ms();
+        BoardCard {
+            id: new_id(),
+            canvas_id: canvas_id.into(),
+            title: title.into(),
+            brief: brief.into(),
+            role,
+            status: CardStatus::Queued,
+            frame_id: None,
+            created_by: String::new(),
+            result: None,
+            error: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+}
+
+/// What makes an automation queue a card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationTrigger {
+    #[default]
+    CommentCreated,
+    FrameApproved,
+    Schedule,
+}
+
+impl AutomationTrigger {
+    pub fn key(self) -> &'static str {
+        match self {
+            AutomationTrigger::CommentCreated => "comment_created",
+            AutomationTrigger::FrameApproved => "frame_approved",
+            AutomationTrigger::Schedule => "schedule",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<AutomationTrigger> {
+        match value {
+            "comment_created" => Some(AutomationTrigger::CommentCreated),
+            "frame_approved" => Some(AutomationTrigger::FrameApproved),
+            "schedule" => Some(AutomationTrigger::Schedule),
+            _ => None,
+        }
+    }
+}
+
+/// A local workflow: when something happens (or every N minutes), queue a card
+/// for a specialist. No server, no scheduler service — the daemon ticks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Automation {
+    pub id: String,
+    pub canvas_id: String,
+    pub name: String,
+    #[serde(default)]
+    pub trigger: AutomationTrigger,
+    /// For `schedule`: minutes between runs.
+    #[serde(default)]
+    pub interval_minutes: Option<i64>,
+    pub brief: String,
+    #[serde(default)]
+    pub role: CardRole,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub last_run_at: Option<i64>,
+    pub created_at: i64,
+}
+
+pub fn default_true() -> bool {
+    true
+}
+
+impl Automation {
+    pub fn new(canvas_id: &str, name: impl Into<String>, brief: impl Into<String>) -> Automation {
+        Automation {
+            id: new_id(),
+            canvas_id: canvas_id.into(),
+            name: name.into(),
+            trigger: AutomationTrigger::default(),
+            interval_minutes: None,
+            brief: brief.into(),
+            role: CardRole::default(),
+            enabled: true,
+            last_run_at: None,
+            created_at: now_ms(),
+        }
+    }
+
+    /// A scheduled automation is due once its interval has passed.
+    pub fn is_due(&self, now: i64) -> bool {
+        if !self.enabled || self.trigger != AutomationTrigger::Schedule {
+            return false;
+        }
+        let Some(minutes) = self.interval_minutes.filter(|m| *m > 0) else {
+            return false;
+        };
+        match self.last_run_at {
+            None => true,
+            Some(last) => now - last >= minutes * 60_000,
+        }
+    }
+}
+
+/// Where a data source reads from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceKind {
+    #[default]
+    Json,
+    Csv,
+    Env,
+}
+
+impl SourceKind {
+    pub fn key(self) -> &'static str {
+        match self {
+            SourceKind::Json => "json",
+            SourceKind::Csv => "csv",
+            SourceKind::Env => "env",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<SourceKind> {
+        match value {
+            "json" => Some(SourceKind::Json),
+            "csv" => Some(SourceKind::Csv),
+            "env" => Some(SourceKind::Env),
+            _ => None,
+        }
+    }
+}
+
+/// A local file a canvas can pull real content from.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataSource {
+    pub id: String,
+    pub canvas_id: String,
+    pub name: String,
+    #[serde(default)]
+    pub kind: SourceKind,
+    /// Absolute path, or one relative to the daemon's data directory.
+    pub path: String,
+    pub updated_at: i64,
+}
+
+/// What a sync target writes back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncKind {
+    #[default]
+    Text,
+    Tokens,
+}
+
+impl SyncKind {
+    pub fn key(self) -> &'static str {
+        match self {
+            SyncKind::Text => "text",
+            SyncKind::Tokens => "tokens",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<SyncKind> {
+        match value {
+            "text" => Some(SyncKind::Text),
+            "tokens" => Some(SyncKind::Tokens),
+            _ => None,
+        }
+    }
+}
+
+/// One element (or the whole token set) that pushes back into a codebase file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncTarget {
+    pub id: String,
+    pub canvas_id: String,
+    pub frame_id: String,
+    /// A CSS selector for `text` targets; ignored for `tokens`.
+    #[serde(default)]
+    pub selector: String,
+    pub path: String,
+    #[serde(default)]
+    pub kind: SyncKind,
+    #[serde(default)]
+    pub last_synced_at: Option<i64>,
     pub created_at: i64,
 }
 
@@ -399,6 +721,29 @@ mod tests {
         assert_eq!(color_for("Claude"), color_for("Claude"));
         assert_ne!(color_for("Claude"), color_for("Codex"));
         assert!(color_for("Claude").starts_with('#'));
+    }
+
+    #[test]
+    fn roles_parse_from_mentions() {
+        assert_eq!(CardRole::parse("@design"), Some(CardRole::Design));
+        assert_eq!(CardRole::parse("review"), Some(CardRole::Review));
+        assert_eq!(CardRole::parse("nope"), None);
+        assert_eq!(CardRole::default().key(), "design");
+        assert!(CardRole::Copy.persona().contains("copywriter"));
+    }
+
+    #[test]
+    fn scheduled_automations_become_due() {
+        let mut automation = Automation::new("canvas", "Weekly sweep", "Review the hero");
+        automation.trigger = AutomationTrigger::Schedule;
+        automation.interval_minutes = Some(30);
+        assert!(automation.is_due(now_ms()));
+        automation.last_run_at = Some(now_ms());
+        assert!(!automation.is_due(now_ms()));
+        automation.last_run_at = Some(now_ms() - 31 * 60_000);
+        assert!(automation.is_due(now_ms()));
+        automation.enabled = false;
+        assert!(!automation.is_due(now_ms()));
     }
 
     #[test]

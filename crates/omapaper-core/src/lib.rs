@@ -7,17 +7,24 @@
 //! No UI, no HTTP, no globals — the daemon, the MCP server and the desktop app
 //! all speak to these types.
 
+pub mod agent;
+pub mod assets;
+pub mod data;
 pub mod guide;
 pub mod html;
 pub mod model;
+pub mod plugins;
 pub mod render;
 pub mod store;
 pub mod theme;
 pub mod tokens;
+pub mod update;
 
 pub use model::{
-    blank_frame_html, color_for, new_id, now_ms, Approval, Canvas, CanvasSummary, Comment,
-    Decision, Frame, Guideline, Page, Peer, PeerKind, Reply, Selection, Token, TokenKind, Version,
+    blank_frame_html, color_for, new_id, now_ms, Approval, Automation, AutomationTrigger, BoardCard,
+    Canvas, CanvasSummary, CardRole, CardStatus, Comment, DataSource, Decision, Frame, Guideline,
+    Page, Peer, PeerKind, Reply, Selection, SourceKind, SyncKind, SyncTarget, Token, TokenKind,
+    Version,
 };
 pub use store::{Result as StoreResult, Store, StoreError};
 pub use theme::{Palette, Rgb, Theme};

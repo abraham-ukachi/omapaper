@@ -9,8 +9,8 @@ use crate::render::base64;
 use crate::Host;
 use omapaper_core::html;
 use omapaper_core::model::{
-    color_for, new_id, now_ms, Approval, Canvas, Comment, Frame, Guideline, Peer, PeerKind, Reply,
-    Selection, Token, TokenKind,
+    color_for, new_id, now_ms, Approval, BoardCard, Canvas, CardRole, CardStatus, Comment, Frame,
+    Guideline, Peer, PeerKind, Reply, Selection, Token, TokenKind,
 };
 use omapaper_core::{render, theme::Theme, tokens as core_tokens};
 use serde_json::{json, Value};
@@ -483,6 +483,41 @@ pub fn definitions() -> Vec<Value> {
                 "summary": {"type": "string"}
             }),
             &["agentName"],
+        ),
+        tool(
+            "list_board_cards",
+            "List board cards",
+            "Tasks on the canvas board: brief, specialist role, status and what came back.",
+            json!({"canvasId": {"type": "string"}}),
+            &[],
+        ),
+        tool(
+            "create_board_card",
+            "Create board card",
+            "Queue a task for a specialist (design, copy, code, review, research). Humans can run it from the Agents tab or @mention a role in a comment.",
+            json!({
+                "canvasId": {"type": "string"},
+                "title": {"type": "string"},
+                "brief": {"type": "string"},
+                "role": {"type": "string", "enum": ["design", "copy", "code", "review", "research"]},
+                "frameId": {"type": "string"},
+                "author": {"type": "string"}
+            }),
+            &["brief"],
+        ),
+        tool(
+            "update_board_card",
+            "Update board card",
+            "Claim a card (status working), finish it (done, with a result) or report a failure.",
+            json!({
+                "canvasId": {"type": "string"},
+                "cardId": {"type": "string"},
+                "status": {"type": "string", "enum": ["queued", "working", "done", "failed"]},
+                "result": {"type": "string"},
+                "title": {"type": "string"},
+                "brief": {"type": "string"}
+            }),
+            &["cardId"],
         ),
     ]
 }
@@ -1363,6 +1398,73 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             });
             host.store.save_canvas(&canvas).map_err(err)?;
             Ok(text(json!(canvas.decisions)))
+        }
+        "list_board_cards" => {
+            let canvas = ctx.canvas()?;
+            Ok(text(json!(host.store.cards(&canvas.id).map_err(err)?)))
+        }
+        "create_board_card" => {
+            let canvas = ctx.canvas()?;
+            let brief = ctx.req_str("brief")?;
+            let role = match ctx.opt_str("role") {
+                Some(value) => CardRole::parse(&value)
+                    .ok_or_else(|| format!("unknown role `{value}`"))?,
+                None => CardRole::default(),
+            };
+            let title = ctx
+                .opt_str("title")
+                .filter(|title| !title.trim().is_empty())
+                .unwrap_or_else(|| {
+                    brief
+                        .lines()
+                        .find(|line| !line.trim().is_empty())
+                        .unwrap_or("Task")
+                        .chars()
+                        .take(64)
+                        .collect()
+                });
+            let mut card = BoardCard::new(&canvas.id, title, brief, role);
+            card.frame_id = ctx.opt_str("frameId");
+            card.created_by = ctx.opt_str("author").unwrap_or_else(|| "agent".into());
+            host.store.add_card(&card).map_err(err)?;
+            host.touch_canvas(&canvas.id);
+            let canvas_id = canvas.id.clone();
+            host.emit(
+                &canvas_id,
+                json!({"type": "card.created", "canvasId": canvas_id, "card": card}),
+            );
+            Ok(text(json!(card)))
+        }
+        "update_board_card" => {
+            let card_id = ctx.req_str("cardId")?;
+            let mut card = host
+                .store
+                .get_card(&card_id)
+                .map_err(err)?
+                .ok_or_else(|| format!("no card `{card_id}`"))?;
+            if let Some(status) = ctx.opt_str("status") {
+                card.status = CardStatus::parse(&status)
+                    .ok_or_else(|| format!("unknown status `{status}`"))?;
+                if card.status != CardStatus::Failed {
+                    card.error = None;
+                }
+            }
+            if let Some(result) = ctx.opt_str("result") {
+                card.result = Some(result);
+            }
+            if let Some(title) = ctx.opt_str("title") {
+                card.title = title;
+            }
+            if let Some(brief) = ctx.opt_str("brief") {
+                card.brief = brief;
+            }
+            host.store.save_card(&card).map_err(err)?;
+            let canvas_id = card.canvas_id.clone();
+            host.emit(
+                &canvas_id,
+                json!({"type": "card.updated", "canvasId": canvas_id, "card": card}),
+            );
+            Ok(text(json!(card)))
         }
         "finish_working" => {
             let canvas = ctx.canvas()?;
