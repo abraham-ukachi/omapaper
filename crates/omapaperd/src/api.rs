@@ -7,16 +7,18 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::http::{header, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
-use axum::routing::{get, patch, post};
+use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use omapaper_core::html;
 use crate::workflow;
 use omapaper_core::model::{
     color_for, new_id, now_ms, Approval, Automation, AutomationTrigger, BoardCard, Canvas, CardRole,
-    CardStatus, Comment, Frame, Peer, PeerKind, Reply, Selection,
+    CardStatus, Comment, DataSource, Frame, Peer, PeerKind, Reply, Selection, SourceKind, SyncKind,
+    SyncTarget,
 };
 use omapaper_core::{render, theme::Theme, tokens, API_VERSION, Health, VERSION};
+use std::collections::BTreeMap;
 use omapaper_mcp::Host;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -99,6 +101,15 @@ pub fn router(app: Shared) -> Router {
             patch(patch_card).delete(delete_card),
         )
         .route("/api/cards/{id}/run", post(run_card))
+        .route(
+            "/api/canvases/{id}/sources",
+            get(list_sources).post(create_source),
+        )
+        .route("/api/sources/{id}", delete(delete_source))
+        .route("/api/canvases/{id}/pull", post(pull_data))
+        .route("/api/canvases/{id}/syncs", get(list_syncs).post(create_sync))
+        .route("/api/syncs/{id}", delete(delete_sync))
+        .route("/api/syncs/{id}/push", post(push_sync))
         .route(
             "/api/canvases/{id}/automations",
             get(list_automations).post(create_automation),
@@ -951,6 +962,219 @@ async fn insert_frame_svg(
     )
     .map_err(ApiError::bad)?;
     Ok(Json(frame))
+}
+
+// ---- data in and copy out -------------------------------------------------
+
+async fn list_sources(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+    Ok(Json(json!(app.host.store.data_sources(&id)?)))
+}
+
+#[derive(Deserialize)]
+struct NewSource {
+    name: String,
+    path: String,
+    kind: Option<String>,
+}
+
+async fn create_source(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(body): Json<NewSource>,
+) -> ApiResult<Json<DataSource>> {
+    let kind = match body.kind.as_deref() {
+        Some(value) => SourceKind::parse(value)
+            .ok_or_else(|| ApiError::bad(format!("unknown source kind `{value}`")))?,
+        None => infer_kind(&body.path),
+    };
+    let source = DataSource {
+        id: new_id(),
+        canvas_id: id,
+        name: body.name,
+        kind,
+        path: body.path,
+        updated_at: now_ms(),
+    };
+    app.host.store.add_data_source(&source)?;
+    Ok(Json(source))
+}
+
+fn infer_kind(path: &str) -> SourceKind {
+    let lower = path.to_lowercase();
+    if lower.ends_with(".csv") {
+        SourceKind::Csv
+    } else if lower.ends_with(".env") || lower.ends_with(".env.local") {
+        SourceKind::Env
+    } else {
+        SourceKind::Json
+    }
+}
+
+async fn delete_source(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+) -> ApiResult<StatusCode> {
+    app.host.store.delete_data_source(&id)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PullBody {
+    source_id: Option<String>,
+}
+
+/// Reads every (or one) source and writes its values into the canvas frames.
+async fn pull_data(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    body: Option<Json<PullBody>>,
+) -> ApiResult<Json<Value>> {
+    let requested = body.and_then(|Json(body)| body.source_id);
+    let sources = app.host.store.data_sources(&id)?;
+    if sources.is_empty() {
+        return Err(ApiError::bad("this canvas has no data sources yet"));
+    }
+    let mut values = BTreeMap::new();
+    let mut used = Vec::new();
+    for source in sources {
+        if requested.as_deref().is_some_and(|only| only != source.id) {
+            continue;
+        }
+        let parsed = omapaper_core::data::read(&source.path, &app.host.data_dir, source.kind)
+            .map_err(ApiError::bad)?;
+        values.extend(parsed);
+        app.host.store.touch_data_source(&source.id)?;
+        used.push(source.name);
+    }
+    let mut frames_changed = 0;
+    let mut replaced = 0;
+    for mut frame in app.host.store.frames(&id)? {
+        let (html, count) = omapaper_core::data::apply(&frame.html, &values);
+        if count == 0 || html == frame.html {
+            continue;
+        }
+        let _ = app
+            .host
+            .store
+            .push_version(&frame, Some("before a data pull"), 30);
+        frame.html = html;
+        frame.revision += 1;
+        app.host.store.save_frame(&frame)?;
+        app.live.send(json!({
+            "type": "frame.updated",
+            "canvasId": frame.canvas_id,
+            "frame": frame,
+        }));
+        frames_changed += 1;
+        replaced += count;
+    }
+    Ok(Json(json!({
+        "sources": used,
+        "keys": values.len(),
+        "frames": frames_changed,
+        "replaced": replaced,
+    })))
+}
+
+async fn list_syncs(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+    Ok(Json(json!(app.host.store.sync_targets(&id)?)))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NewSync {
+    frame_id: String,
+    path: String,
+    selector: Option<String>,
+    kind: Option<String>,
+}
+
+async fn create_sync(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(body): Json<NewSync>,
+) -> ApiResult<Json<SyncTarget>> {
+    if app.host.store.get_frame(&body.frame_id)?.is_none() {
+        return Err(ApiError::not_found(format!("no frame `{}`", body.frame_id)));
+    }
+    let kind = match body.kind.as_deref() {
+        Some(value) => SyncKind::parse(value)
+            .ok_or_else(|| ApiError::bad(format!("unknown sync kind `{value}`")))?,
+        None => SyncKind::Text,
+    };
+    let selector = body.selector.unwrap_or_default();
+    if kind == SyncKind::Text && selector.trim().is_empty() {
+        return Err(ApiError::bad("a text sync needs a CSS selector"));
+    }
+    let target = SyncTarget {
+        id: new_id(),
+        canvas_id: id,
+        frame_id: body.frame_id,
+        selector,
+        path: body.path,
+        kind,
+        last_synced_at: None,
+        created_at: now_ms(),
+    };
+    app.host.store.add_sync_target(&target)?;
+    Ok(Json(target))
+}
+
+async fn delete_sync(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+) -> ApiResult<StatusCode> {
+    app.host.store.delete_sync_target(&id)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Writes the element's text (or the token CSS) to the target's file.
+async fn push_sync(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+    let target = app
+        .host
+        .store
+        .get_sync_target(&id)?
+        .ok_or_else(|| ApiError::not_found(format!("no sync target `{id}`")))?;
+    let frame = app
+        .host
+        .store
+        .get_frame(&target.frame_id)?
+        .ok_or_else(|| ApiError::not_found(format!("no frame `{}`", target.frame_id)))?;
+    let content = match target.kind {
+        SyncKind::Text => {
+            let found = omapaper_core::html::find(&frame.html, &target.selector)
+                .map_err(|error| ApiError::bad(format!("{error:?}")))?;
+            let node = found
+                .first()
+                .ok_or_else(|| ApiError::bad(format!("`{}` matched nothing", target.selector)))?;
+            omapaper_core::html::text_content(&omapaper_core::html::serialize_node(
+                &node.node,
+            ))
+            .trim()
+            .to_string()
+        }
+        SyncKind::Tokens => {
+            let canvas = app
+                .host
+                .store
+                .get_canvas(&target.canvas_id)?
+                .ok_or_else(|| ApiError::not_found(format!("no canvas `{}`", target.canvas_id)))?;
+            omapaper_core::tokens::tokens_css_all(&canvas.tokens, &canvas.token_themes)
+        }
+    };
+    let path = omapaper_core::data::resolve(&target.path, &app.host.data_dir);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| ApiError::bad(error.to_string()))?;
+    }
+    std::fs::write(&path, &content).map_err(|error| {
+        ApiError::bad(format!("cannot write {}: {error}", path.display()))
+    })?;
+    app.host.store.touch_sync_target(&id)?;
+    Ok(Json(json!({
+        "path": path.display().to_string(),
+        "bytes": content.len(),
+    })))
 }
 
 // ---- webhooks -------------------------------------------------------------

@@ -485,6 +485,27 @@ pub fn definitions() -> Vec<Value> {
             &["agentName"],
         ),
         tool(
+            "list_data_sources",
+            "List data sources",
+            "The local JSON, CSV or .env files a canvas can pull real content from.",
+            json!({"canvasId": {"type": "string"}}),
+            &[],
+        ),
+        tool(
+            "pull_data",
+            "Pull data",
+            "Replace every {{dotted.key}} in the canvas frames with values from its data sources. Returns how many frames and placeholders changed.",
+            json!({"canvasId": {"type": "string"}, "sourceId": {"type": "string"}}),
+            &[],
+        ),
+        tool(
+            "push_sync",
+            "Push sync",
+            "Write a frame element's text (or the canvas tokens as CSS) to a sync target file.",
+            json!({"canvasId": {"type": "string"}, "syncId": {"type": "string"}}),
+            &["syncId"],
+        ),
+        tool(
             "list_board_cards",
             "List board cards",
             "Tasks on the canvas board: brief, specialist role, status and what came back.",
@@ -1398,6 +1419,94 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             });
             host.store.save_canvas(&canvas).map_err(err)?;
             Ok(text(json!(canvas.decisions)))
+        }
+        "list_data_sources" => {
+            let canvas = ctx.canvas()?;
+            Ok(text(
+                json!(host.store.data_sources(&canvas.id).map_err(err)?),
+            ))
+        }
+        "pull_data" => {
+            let canvas = ctx.canvas()?;
+            let only = ctx.opt_str("sourceId");
+            let mut values = std::collections::BTreeMap::new();
+            for source in host.store.data_sources(&canvas.id).map_err(err)? {
+                if only.as_deref().is_some_and(|only| only != source.id) {
+                    continue;
+                }
+                let parsed = omapaper_core::data::read(&source.path, &host.data_dir, source.kind)?;
+                values.extend(parsed);
+                host.store.touch_data_source(&source.id).map_err(err)?;
+            }
+            if values.is_empty() {
+                return Ok(text(json!({"frames": 0, "replaced": 0, "keys": 0})));
+            }
+            let mut frames = 0;
+            let mut replaced = 0;
+            for mut frame in host.store.frames(&canvas.id).map_err(err)? {
+                let (html, count) = omapaper_core::data::apply(&frame.html, &values);
+                if count == 0 || html == frame.html {
+                    continue;
+                }
+                let _ = host
+                    .store
+                    .push_version(&frame, Some("before a data pull"), 30);
+                frame.html = html;
+                frame.revision += 1;
+                host.store.save_frame(&frame).map_err(err)?;
+                host.emit(
+                    &frame.canvas_id,
+                    json!({"type": "frame.updated", "canvasId": frame.canvas_id, "frame": frame}),
+                );
+                frames += 1;
+                replaced += count;
+            }
+            Ok(text(json!({"frames": frames, "replaced": replaced, "keys": values.len()})))
+        }
+        "push_sync" => {
+            let sync_id = ctx.req_str("syncId")?;
+            let target = host
+                .store
+                .get_sync_target(&sync_id)
+                .map_err(err)?
+                .ok_or_else(|| format!("no sync target `{sync_id}`"))?;
+            let frame = host
+                .store
+                .get_frame(&target.frame_id)
+                .map_err(err)?
+                .ok_or_else(|| format!("no frame `{}`", target.frame_id))?;
+            let content = match target.kind {
+                omapaper_core::model::SyncKind::Text => {
+                    let found = html::find(&frame.html, &target.selector)
+                        .map_err(|error| format!("{error:?}"))?;
+                    let node = found.first().ok_or_else(|| {
+                        format!("`{}` matched nothing", target.selector)
+                    })?;
+                    html::text_content(&html::serialize_node(&node.node))
+                        .trim()
+                        .to_string()
+                }
+                omapaper_core::model::SyncKind::Tokens => {
+                    let canvas = host
+                        .store
+                        .get_canvas(&target.canvas_id)
+                        .map_err(err)?
+                        .ok_or_else(|| format!("no canvas `{}`", target.canvas_id))?;
+                    core_tokens::tokens_css_all(&canvas.tokens, &canvas.token_themes)
+                }
+            };
+            let path = omapaper_core::data::resolve(&target.path, &host.data_dir);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+            }
+            std::fs::write(&path, &content)
+                .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+            host.store.touch_sync_target(&sync_id).map_err(err)?;
+            Ok(text(json!({
+                "path": path.display().to_string(),
+                "bytes": content.len()
+            })))
         }
         "list_board_cards" => {
             let canvas = ctx.canvas()?;

@@ -104,6 +104,7 @@
           <button class="tab" data-tab="taste" role="tab">Taste</button>
           <button class="tab" data-tab="webhooks" role="tab">Webhooks</button>
           <button class="tab" data-tab="agents" role="tab">Agents</button>
+          <button class="tab" data-tab="sync" role="tab">Sync</button>
         </div>
 
         <section id="pane-dashboard" class="pane">
@@ -286,6 +287,62 @@
             <button id="addAutomation" class="primary small">Add automation</button>
           </div>
           <div id="automationList" class="comment-list"></div>
+        </section>
+
+        <section id="pane-sync" class="pane" hidden>
+          <div class="pane-intro">
+            <p class="kicker">data in</p>
+            <p class="muted small">Point at a local JSON, CSV or .env file. Every <code>{{dotted.key}}</code> in a frame is replaced on pull.</p>
+          </div>
+          <div class="row">
+            <div class="field"><label for="sourceName">Name</label>
+              <input id="sourceName" placeholder="content.json" autocomplete="off">
+            </div>
+            <div class="field"><label for="sourceKind">Kind</label>
+              <select id="sourceKind">
+                <option value="json">json</option>
+                <option value="csv">csv</option>
+                <option value="env">env</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="sourcePath">Path (absolute, or under the data dir)</label>
+            <input id="sourcePath" placeholder="~/Work/app/content.json" autocomplete="off">
+          </div>
+          <div class="actions">
+            <button id="addSource" class="primary small">Add source</button>
+            <button id="pullData" class="ghost small">Pull into frames</button>
+          </div>
+          <div id="sourceList" class="comment-list"></div>
+
+          <div class="pane-intro">
+            <p class="kicker">copy out</p>
+            <p class="muted small">Push an element's text, or the whole token set as CSS, into a file in your codebase.</p>
+          </div>
+          <div class="field">
+            <label for="syncFrame">Frame</label>
+            <select id="syncFrame"></select>
+          </div>
+          <div class="row">
+            <div class="field"><label for="syncKind">What</label>
+              <select id="syncKind">
+                <option value="text">element text</option>
+                <option value="tokens">tokens (css)</option>
+              </select>
+            </div>
+            <div class="field"><label for="syncSelector">Selector</label>
+              <input id="syncSelector" placeholder="h1.hero" autocomplete="off">
+            </div>
+          </div>
+          <div class="field">
+            <label for="syncPath">File</label>
+            <input id="syncPath" placeholder="~/Work/app/src/copy/hero.html" autocomplete="off">
+          </div>
+          <div class="actions">
+            <button id="addSync" class="primary small">Add target</button>
+          </div>
+          <div id="syncList" class="comment-list"></div>
         </section>
 
         <section id="pane-webhooks" class="pane" hidden>

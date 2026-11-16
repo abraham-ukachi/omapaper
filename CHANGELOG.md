@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.11.0-beta.1] - 2026-11-16
+
+### Added
+- :inbox_tray: Data sources: point a canvas at a local JSON, CSV or `.env` file and pull it into every frame, replacing `{{dotted.key}}` placeholders.
+- :outbox_tray: Sync targets: push an element's text (by CSS selector) or the canvas tokens as CSS back into a file in your codebase.
+- :arrows_counterclockwise: Sync tab with sources, pull, targets and push; pulls keep a version before overwriting.
+- :toolbox: MCP tools `list_data_sources`, `pull_data`, `push_sync`.
+
+### Notes
+- Beta release. Everything is local files: no database drivers, no network.
+
 ## [0.10.0-beta.1] - 2026-11-16
 
 ### Added

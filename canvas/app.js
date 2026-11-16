@@ -55,6 +55,8 @@ const state = {
   cards: [],
   automations: [],
   agent: { configured: false },
+  sources: [],
+  syncs: [],
   lastCursor: 0,
 };
 
@@ -159,6 +161,7 @@ async function loadCanvas(id) {
   renderDashboard();
   loadWebhooks();
   loadAgents();
+  loadSync();
   if (state.ws && state.ws.readyState === 1) state.ws.close();
   connect();
 }
@@ -1277,6 +1280,174 @@ async function removeAutomation(id) {
   }
 }
 
+async function loadSync() {
+  if (!state.canvasId) return;
+  try {
+    const [sources, syncs] = await Promise.all([
+      api(`/api/canvases/${state.canvasId}/sources`),
+      api(`/api/canvases/${state.canvasId}/syncs`),
+    ]);
+    state.sources = sources || [];
+    state.syncs = syncs || [];
+    renderSync();
+  } catch {
+    /* ignore */
+  }
+}
+
+function renderSync() {
+  const list = $("#sourceList");
+  if (list) {
+    list.innerHTML = "";
+    if (!state.sources.length) {
+      list.innerHTML = `<p class="muted small">No data sources yet.</p>`;
+    }
+    for (const source of state.sources) {
+      const row = document.createElement("div");
+      row.className = "comment";
+      row.innerHTML = `<div class="chead"><b>${escapeHtml(source.name)}</b><span class="pill role">${escapeHtml(source.kind)}</span></div><p class="cbody muted small">${escapeHtml(source.path)}</p>`;
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const remove = document.createElement("button");
+      remove.className = "danger small";
+      remove.textContent = "Remove";
+      remove.onclick = () => removeSource(source.id);
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      list.appendChild(row);
+    }
+  }
+
+  const frameSelect = $("#syncFrame");
+  if (frameSelect) {
+    const chosen = frameSelect.value || state.selectedFrameId;
+    frameSelect.innerHTML = "";
+    for (const frame of state.frames) {
+      const option = document.createElement("option");
+      option.value = frame.id;
+      option.textContent = frame.name;
+      frameSelect.appendChild(option);
+    }
+    if (state.frames.some((frame) => frame.id === chosen)) frameSelect.value = chosen;
+  }
+
+  const syncs = $("#syncList");
+  if (syncs) {
+    syncs.innerHTML = "";
+    if (!state.syncs.length) {
+      syncs.innerHTML = `<p class="muted small">No sync targets yet.</p>`;
+    }
+    for (const target of state.syncs) {
+      const frame = state.frames.find((item) => item.id === target.frameId);
+      const row = document.createElement("div");
+      row.className = "comment";
+      row.innerHTML = `<div class="chead"><b>${escapeHtml(frame?.name || "frame")}</b><span class="pill role">${escapeHtml(target.kind)}</span></div>
+        <p class="cbody muted small">${target.kind === "text" ? `${escapeHtml(target.selector)} → ` : "tokens → "}${escapeHtml(target.path)}</p>`;
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const push = document.createElement("button");
+      push.className = "ghost small";
+      push.textContent = "Push";
+      push.onclick = () => pushSync(target.id);
+      actions.appendChild(push);
+      const remove = document.createElement("button");
+      remove.className = "danger small";
+      remove.textContent = "Remove";
+      remove.onclick = () => removeSync(target.id);
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      syncs.appendChild(row);
+    }
+  }
+}
+
+async function addSource() {
+  const name = $("#sourceName").value.trim();
+  const path = $("#sourcePath").value.trim();
+  if (!name || !path) {
+    toast("A source needs a name and a path", true);
+    return;
+  }
+  try {
+    await api(`/api/canvases/${state.canvasId}/sources`, {
+      method: "POST",
+      body: JSON.stringify({ name, path, kind: $("#sourceKind").value }),
+    });
+    $("#sourceName").value = "";
+    $("#sourcePath").value = "";
+    await loadSync();
+    toast("Source added");
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function pullData() {
+  try {
+    const result = await api(`/api/canvases/${state.canvasId}/pull`, { method: "POST" });
+    await loadSync();
+    await reloadCanvasData();
+    toast(`${result.replaced} value${result.replaced === 1 ? "" : "s"} into ${result.frames} frame${result.frames === 1 ? "" : "s"}`);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function removeSource(id) {
+  try {
+    await api(`/api/sources/${id}`, { method: "DELETE" });
+    await loadSync();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function addSync() {
+  const path = $("#syncPath").value.trim();
+  const kind = $("#syncKind").value;
+  const selector = $("#syncSelector").value.trim();
+  if (!path || (kind === "text" && !selector)) {
+    toast("A target needs a file, and text needs a selector", true);
+    return;
+  }
+  const frameId = $("#syncFrame").value;
+  if (!frameId) {
+    toast("Add a frame first", true);
+    return;
+  }
+  try {
+    await api(`/api/canvases/${state.canvasId}/syncs`, {
+      method: "POST",
+      body: JSON.stringify({ frameId, path, selector, kind }),
+    });
+    $("#syncPath").value = "";
+    $("#syncSelector").value = "";
+    await loadSync();
+    toast("Sync target added");
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function pushSync(id) {
+  try {
+    const result = await api(`/api/syncs/${id}/push`, { method: "POST" });
+    await loadSync();
+    toast(`Wrote ${result.bytes} bytes to ${result.path}`);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function removeSync(id) {
+  try {
+    await api(`/api/syncs/${id}`, { method: "DELETE" });
+    await loadSync();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 function renderCursors() {
   const layer = $("#cursorLayer");
   layer.innerHTML = "";
@@ -1949,7 +2120,7 @@ function applyZoom() {
 function setTab(tab) {
   state.tab = tab;
   for (const button of $$(".tab")) button.classList.toggle("active", button.dataset.tab === tab);
-  for (const pane of ["dashboard", "inspect", "tokens", "comments", "activity", "taste", "webhooks", "agents"]) {
+  for (const pane of ["dashboard", "inspect", "tokens", "comments", "activity", "taste", "webhooks", "agents", "sync"]) {
     const element = $(`#pane-${pane}`);
     if (element) element.hidden = pane !== tab;
   }
@@ -1958,6 +2129,7 @@ function setTab(tab) {
   if (tab === "taste") renderTaste();
   if (tab === "webhooks") renderWebhooks();
   if (tab === "agents") renderAgents();
+  if (tab === "sync") renderSync();
 }
 
 function openPlay(frameId = state.selectedFrameId) {
@@ -2213,6 +2385,12 @@ function bind() {
 
   $("#addCard").onclick = addCard;
   $("#addAutomation").onclick = addAutomation;
+  $("#addSource").onclick = addSource;
+  $("#pullData").onclick = pullData;
+  $("#addSync").onclick = addSync;
+  $("#syncKind").onchange = () => {
+    $("#syncSelector").disabled = $("#syncKind").value === "tokens";
+  };
   $("#cardBrief").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) addCard();
   });
@@ -2237,7 +2415,7 @@ function bind() {
 
   if (state.readonly) {
     document.body.classList.add("readonly");
-    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#newPageBtn", "#duplicateCanvasBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment", "#addCard", "#addAutomation"]) {
+    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#newPageBtn", "#duplicateCanvasBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment", "#addCard", "#addAutomation", "#addSource", "#pullData", "#addSync"]) {
       const element = $(selector);
       if (element) element.hidden = true;
     }
