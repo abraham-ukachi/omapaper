@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.4.0-beta.3] - 2026-11-16
+
+### Added
+- :iphone: Touch support for frame resizing, selection drawer auto-close, and pinch-to-zoom on the canvas stage.
+- :iphone: Larger touch targets for resize handles and controls on narrow screens.
+
+### Notes
+- Beta release. Mobile editing is improving but remains best on larger screens.
+
 ## [0.4.0-beta.2] - 2026-11-16
 
 ### Fixed

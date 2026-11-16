@@ -356,7 +356,7 @@ function frameElement(frame) {
         window.open(`/api/frames/${frame.id}/export?format=png`, "_blank");
       }
     });
-    element.querySelector(".resize-handle").addEventListener("mousedown", (event) => beginResize(event, frame.id));
+    element.querySelector(".resize-handle").addEventListener("pointerdown", (event) => beginResize(event, frame.id));
     element.querySelector("iframe").addEventListener("load", () => wireFrame(frame.id));
   }
 
@@ -395,6 +395,9 @@ function selectFrame(id) {
   state.selectedNode = null;
   state.selectedNodes = [];
   store.set("frame", id);
+  document.body.classList.remove("rail-open", "panel-open");
+  const backdrop = $("#drawerBackdrop");
+  if (backdrop) backdrop.hidden = true;
   for (const [frameId, element] of frameElements) {
     element.classList.toggle("selected", frameId === id);
   }
@@ -1453,6 +1456,24 @@ function bind() {
   const backdrop = $("#drawerBackdrop");
   if (backdrop) backdrop.onclick = closeDrawers;
   $("#stageWrap").addEventListener("click", closeDrawers);
+
+  // Pinch to zoom on touch devices.
+  let pinchStart = null;
+  const pinchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  $("#stageWrap").addEventListener("touchstart", (event) => {
+    if (event.touches.length === 2) {
+      pinchStart = { distance: pinchDistance(event.touches), zoom: state.zoom };
+    }
+  }, { passive: true });
+  $("#stageWrap").addEventListener("touchmove", (event) => {
+    if (pinchStart && event.touches.length === 2) {
+      event.preventDefault();
+      const scale = pinchDistance(event.touches) / pinchStart.distance;
+      state.zoom = pinchStart.zoom * scale;
+      applyZoom();
+    }
+  }, { passive: false });
+  $("#stageWrap").addEventListener("touchend", () => { pinchStart = null; }, { passive: true });
   $("#newPageBtn").onclick = newPage;
   $("#importFrameBtn").onclick = () => $("#importFile").click();
   $("#frameSearch").oninput = (event) => {
@@ -1605,8 +1626,9 @@ function bind() {
   document.addEventListener("click", (event) => {
     if (event.target.closest(".nav-item, .page-nav button")) closeDrawers();
   });
-  document.addEventListener("mousemove", applyResize);
-  document.addEventListener("mouseup", finishResize);
+  document.addEventListener("pointermove", applyResize);
+  document.addEventListener("pointerup", finishResize);
+  document.addEventListener("pointercancel", finishResize);
 
   window.addEventListener("beforeunload", () => {
     if (state.ws) state.ws.close();
