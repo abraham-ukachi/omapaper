@@ -761,3 +761,5 @@ body.ui-hidden .topbar, body.ui-hidden .rail, body.ui-hidden .panel { display: n
 body[data-tool="rect"] iframe, body[data-tool="ellipse"] iframe { cursor: crosshair; }
 body[data-tool="text"] iframe { cursor: text; }
 body[data-tool="hand"] .stage { cursor: grab; }
+.op-resize { position: absolute; right: -4px; bottom: -4px; width: 10px; height: 10px; border-radius: 2px; background: var(--op-accent, #888); cursor: nwse-resize; z-index: 5; }
+[data-op-selected] { outline: 2px solid var(--op-accent, #f38d70); outline-offset: 2px; }

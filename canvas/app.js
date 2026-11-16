@@ -419,6 +419,37 @@ function wireFrame(frameId) {
   const doc = iframe?.contentDocument;
   if (!doc) return;
   let lastPointerSelect = 0;
+  const attachResize = (node) => {
+    if (node.querySelector(":scope > .op-resize")) return;
+    const handle = doc.createElement("span");
+    handle.className = "op-resize";
+    handle.setAttribute("aria-hidden", "true");
+    node.appendChild(handle);
+    handle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const startW = node.offsetWidth;
+      const startH = node.offsetHeight;
+      const onMove = (moveEvent) => {
+        const width = Math.max(8, startW + (moveEvent.clientX - startX) / state.zoom);
+        const height = Math.max(8, startH + (moveEvent.clientY - startY) / state.zoom);
+        node.style.width = `${Math.round(width)}px`;
+        node.style.height = `${Math.round(height)}px`;
+      };
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        saveFrameHtmlFromDom(frameId);
+      };
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+    });
+  };
+
+  for (const node of doc.querySelectorAll("[data-op-id]")) attachResize(node);
+
   const selectNode = (target, shiftKey) => {
     const node = {
       id: target.getAttribute("data-op-id") || "",
@@ -482,6 +513,21 @@ function wireFrame(frameId) {
     lastPointerSelect = Date.now();
     selectNode(target, false);
   });
+  doc.addEventListener("dblclick", (event) => {
+    const target = event.target?.closest?.("[data-op-id]");
+    if (!target) return;
+    const kind = target.getAttribute("data-name");
+    if (kind !== "text" && target.tagName.toLowerCase() !== "p") return;
+    target.contentEditable = "true";
+    target.focus();
+    const finish = () => {
+      target.contentEditable = "false";
+      target.removeEventListener("blur", finish);
+      saveFrameHtmlFromDom(frameId);
+    };
+    target.addEventListener("blur", finish, { once: true });
+  });
+
   doc.addEventListener("mousemove", (event) => {
     const now = Date.now();
     if (now - state.lastCursor < 140) return;
@@ -1444,6 +1490,31 @@ function createShape(frameId, kind, x, y) {
     node.style.alignItems = "center";
   }
   body.appendChild(node);
+  const resizeHandle = doc.createElement("span");
+  resizeHandle.className = "op-resize";
+  resizeHandle.setAttribute("aria-hidden", "true");
+  node.appendChild(resizeHandle);
+  resizeHandle.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startW = node.offsetWidth;
+    const startH = node.offsetHeight;
+    const onMove = (moveEvent) => {
+      const width = Math.max(8, startW + (moveEvent.clientX - startX) / state.zoom);
+      const height = Math.max(8, startH + (moveEvent.clientY - startY) / state.zoom);
+      node.style.width = `${Math.round(width)}px`;
+      node.style.height = `${Math.round(height)}px`;
+    };
+    const onUp = () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      saveFrameHtmlFromDom(frameId);
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+  });
   state.selectedNode = { id, tag: node.tagName.toLowerCase(), label: kind, frameId };
   state.selectedNodes = [state.selectedNode];
   for (const marked of doc.querySelectorAll("[data-op-selected]")) marked.removeAttribute("data-op-selected");

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.6.0-beta.2] - 2026-11-16
+
+### Added
+- :art: Resize handles for inserted shapes.
+- :pencil2: Double-click text layers for inline editing.
+- :white_check_mark: Selection outline and layer handles.
+
+### Notes
+- Completes Phase A foundation scope; pen paths, rulers/guides and full layer tree remain planned.
+
 ## [0.6.0-beta.1] - 2026-11-16
 
 ### Added
