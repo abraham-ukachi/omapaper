@@ -137,6 +137,18 @@ pub struct Decision {
     pub created_at: i64,
 }
 
+/// An outbound webhook registered on a canvas.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Webhook {
+    pub id: String,
+    pub canvas_id: String,
+    pub url: String,
+    #[serde(default)]
+    pub events: Vec<String>,
+    pub created_at: i64,
+}
+
 /// Where a frame stands with its human reviewer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]

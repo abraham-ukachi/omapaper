@@ -47,7 +47,11 @@ const state = {
   playFrameId: null,
   undoStacks: new Map(),
   redoStacks: new Map(),
-  readonly: new URLSearchParams(location.search).has("readonly"),
+  readonly: new URLSearchParams(location.search).has("readonly") || new URLSearchParams(location.search).get("mode") === "view",
+  mode: new URLSearchParams(location.search).get("mode") || "edit",
+  activities: [],
+  followingPeerId: null,
+  webhooks: [],
   lastCursor: 0,
 };
 
@@ -150,6 +154,7 @@ async function loadCanvas(id) {
   resetStage();
   renderAll();
   renderDashboard();
+  loadWebhooks();
   if (state.ws && state.ws.readyState === 1) state.ws.close();
   connect();
 }
@@ -256,7 +261,8 @@ function renderRail() {
     button.className = `nav-item${frame.id === state.selectedFrameId ? " active" : ""}`;
     button.innerHTML = `<span class="glyph">▢</span><span class="label"></span><span class="meta"></span>`;
     button.querySelector(".label").textContent = frame.name;
-    button.querySelector(".meta").textContent = `${Math.round(frame.width)}×${Math.round(frame.height)}`;
+    const editing = state.peers.filter((p) => p.frameId === frame.id && p.id !== state.peerId).length;
+    button.querySelector(".meta").textContent = `${Math.round(frame.width)}×${Math.round(frame.height)}${editing ? ` · ${editing} editing` : ""}`;
     button.onclick = () => {
       selectFrame(frame.id);
       frameElements.get(frame.id)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -925,10 +931,15 @@ function renderPresence() {
   target.innerHTML = "";
   for (const peer of state.peers.slice(0, 6)) {
     const dot = document.createElement("span");
-    dot.className = `peer${peer.kind === "agent" ? " agent" : ""}`;
+    dot.className = `peer${peer.kind === "agent" ? " agent" : ""}${state.followingPeerId === peer.id ? " following" : ""}`;
     dot.style.background = peer.color || "var(--op-accent)";
     dot.textContent = initials(peer.name);
-    dot.title = `${peer.name}${peer.status ? ` — ${peer.status}` : ""}`;
+    dot.title = `${peer.name}${peer.status ? ` — ${peer.status}` : ""} (click to follow)`;
+    dot.onclick = () => {
+      state.followingPeerId = state.followingPeerId === peer.id ? null : peer.id;
+      renderPresence();
+      toast(state.followingPeerId ? `Following ${peer.name}` : "Stopped following");
+    };
     target.appendChild(dot);
   }
   if (state.peers.length > 6) {
@@ -936,6 +947,120 @@ function renderPresence() {
     more.className = "peer";
     more.textContent = `+${state.peers.length - 6}`;
     target.appendChild(more);
+  }
+}
+
+function addActivity(message) {
+  state.activities.unshift({ id: crypto.randomUUID(), message, createdAt: Date.now() });
+  state.activities = state.activities.slice(0, 60);
+  renderActivity();
+}
+
+function renderActivity() {
+  const list = $("#activityList");
+  if (!list) return;
+  list.innerHTML = "";
+  if (!state.activities.length) {
+    list.innerHTML = `<p class="muted small">No activity yet.</p>`;
+    return;
+  }
+  for (const item of state.activities) {
+    const row = document.createElement("div");
+    row.className = "comment";
+    row.innerHTML = `<div class="chead"><span>${escapeHtml(item.message)}</span><span>${timeAgo(item.createdAt)}</span></div>`;
+    list.appendChild(row);
+  }
+}
+
+function renderTaste() {
+  const target = $("#tasteBody");
+  if (!target) return;
+  target.innerHTML = "";
+  const canvas = state.canvas || {};
+  const guidelines = canvas.guidelines || [];
+  const decisions = canvas.decisions || [];
+  const section = (title, items, render) => {
+    const label = document.createElement("div");
+    label.className = "rail-label";
+    label.textContent = title;
+    target.appendChild(label);
+    if (!items.length) {
+      const empty = document.createElement("p");
+      empty.className = "muted small";
+      empty.textContent = "None yet.";
+      target.appendChild(empty);
+      return;
+    }
+    for (const item of items) render(item);
+  };
+  section("guidelines", guidelines, (g) => {
+    const row = document.createElement("div");
+    row.className = "comment";
+    row.innerHTML = `<div class="chead"><b>${escapeHtml(g.name)}</b></div><p class="cbody">${escapeHtml(g.body)}</p>`;
+    target.appendChild(row);
+  });
+  section("decisions", decisions, (d) => {
+    const row = document.createElement("div");
+    row.className = "comment";
+    row.innerHTML = `<p class="cbody">${escapeHtml(d.body)}</p><div class="chead"><span>${timeAgo(d.createdAt)}</span></div>`;
+    target.appendChild(row);
+  });
+  if (!state.readonly) {
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const addGuide = document.createElement("button");
+    addGuide.className = "ghost small";
+    addGuide.textContent = "+ Guideline";
+    addGuide.onclick = async () => {
+      const name = prompt("Guideline name");
+      const body = prompt("Guideline body");
+      if (!name || !body) return;
+      try {
+        const guidelines = [...(state.canvas.guidelines || []), { id: crypto.randomUUID(), name, body, updatedAt: Date.now() }];
+        state.canvas = await api(`/api/canvases/${state.canvasId}`, { method: "PATCH", body: JSON.stringify({ guidelines }) });
+        renderTaste();
+        toast("Guideline added");
+      } catch (error) {
+        toast(error.message, true);
+      }
+    };
+    actions.appendChild(addGuide);
+    target.appendChild(actions);
+  }
+}
+
+async function loadWebhooks() {
+  if (!state.canvasId) return;
+  try {
+    state.webhooks = await api(`/api/canvases/${state.canvasId}/webhooks`);
+    renderWebhooks();
+  } catch {
+    /* ignore */
+  }
+}
+
+function renderWebhooks() {
+  const list = $("#webhookList");
+  if (!list) return;
+  list.innerHTML = "";
+  if (!state.webhooks.length) {
+    list.innerHTML = `<p class="muted small">No webhooks yet.</p>`;
+    return;
+  }
+  for (const hook of state.webhooks) {
+    const row = document.createElement("div");
+    row.className = "comment";
+    row.innerHTML = `<div class="chead"><span>${escapeHtml(hook.url)}</span><button class="ghost small" data-id="${hook.id}">remove</button></div><p class="cbody">${escapeHtml((hook.events || []).join(", "))}</p>`;
+    row.querySelector("button").onclick = async () => {
+      try {
+        await api(`/api/webhooks/${hook.id}`, { method: "DELETE" });
+        await loadWebhooks();
+        toast("Webhook removed");
+      } catch (error) {
+        toast(error.message, true);
+      }
+    };
+    list.appendChild(row);
   }
 }
 
@@ -952,6 +1077,13 @@ function renderCursors() {
     cursor.style.setProperty("--cursor-color", peer.color || "var(--op-accent)");
     cursor.innerHTML = `<span>${escapeHtml(peer.name)}</span>`;
     layer.appendChild(cursor);
+  }
+  if (state.followingPeerId) {
+    const peer = state.peers.find((p) => p.id === state.followingPeerId);
+    if (peer) {
+      const wrap = $("#stageWrap");
+      if (wrap) wrap.scrollTo({ left: Math.max(0, peer.x * state.zoom - wrap.clientWidth / 2), top: Math.max(0, peer.y * state.zoom - wrap.clientHeight / 2), behavior: "smooth" });
+    }
   }
 }
 
@@ -1037,6 +1169,7 @@ function handleEvent(event) {
       if (!state.frames.some((f) => f.id === event.frame.id)) {
         state.frames.push({ ...event.frame, elements: event.frame.elements || 0 });
       }
+      addActivity(`Frame created: ${event.frame?.name || event.frame?.id}`);
       renderStage();
       renderRail();
       break;
@@ -1060,6 +1193,7 @@ function handleEvent(event) {
       loadCanvases().catch(() => {});
       break;
     case "comment.created":
+      addActivity(`Comment added${event.comment?.body ? `: ${event.comment.body.slice(0, 40)}` : ""}`);
     case "comment.updated":
       refreshComments().catch(() => {});
       break;
@@ -1585,11 +1719,14 @@ function applyZoom() {
 function setTab(tab) {
   state.tab = tab;
   for (const button of $$(".tab")) button.classList.toggle("active", button.dataset.tab === tab);
-  for (const pane of ["dashboard", "inspect", "tokens", "comments"]) {
+  for (const pane of ["dashboard", "inspect", "tokens", "comments", "activity", "taste", "webhooks"]) {
     const element = $(`#pane-${pane}`);
     if (element) element.hidden = pane !== tab;
   }
   if (tab === "dashboard") renderDashboard();
+  if (tab === "activity") renderActivity();
+  if (tab === "taste") renderTaste();
+  if (tab === "webhooks") renderWebhooks();
 }
 
 function openPlay(frameId = state.selectedFrameId) {
@@ -1841,6 +1978,24 @@ function bind() {
     } catch {
       toast(url.toString());
     }
+  };
+
+  $("#addWebhook").onclick = async () => {
+    const url = $("#webhookUrl").value.trim();
+    if (!url) return;
+    try {
+      await api(`/api/canvases/${state.canvasId}/webhooks`, { method: "POST", body: JSON.stringify({ url, events: ["comment.created", "frame.updated"] }) });
+      $("#webhookUrl").value = "";
+      await loadWebhooks();
+      toast("Webhook added");
+    } catch (error) {
+      toast(error.message, true);
+    }
+  };
+  $("#copyLink").onclick = () => {
+    const frame = selectedFrame();
+    const url = `${location.origin}/?canvas=${encodeURIComponent(state.canvasId)}${frame ? `&frame=${encodeURIComponent(frame.id)}` : ""}${state.selectedNode?.id ? `&node=${encodeURIComponent(state.selectedNode.id)}` : ""}&mode=view`;
+    navigator.clipboard?.writeText(url).then(() => toast("Link copied"));
   };
 
   if (state.readonly) {

@@ -83,6 +83,11 @@ pub fn router(app: Shared) -> Router {
             get(list_comments).post(create_comment),
         )
         .route(
+            "/api/canvases/{id}/webhooks",
+            get(list_webhooks).post(create_webhook),
+        )
+        .route("/api/webhooks/{id}", axum::routing::delete(delete_webhook))
+        .route(
             "/api/canvases/{id}/presence",
             get(get_presence).post(post_presence),
         )
@@ -329,6 +334,8 @@ async fn get_canvas(State(app): State<Shared>, Path(id): Path<String>) -> ApiRes
 #[derive(Deserialize)]
 struct PatchCanvas {
     name: Option<String>,
+    guidelines: Option<Vec<omapaper_core::model::Guideline>>,
+    decisions: Option<Vec<omapaper_core::model::Decision>>,
 }
 
 async fn patch_canvas(
@@ -343,6 +350,12 @@ async fn patch_canvas(
         .ok_or_else(|| ApiError::not_found(format!("no canvas `{id}`")))?;
     if let Some(name) = body.name {
         canvas.name = name;
+    }
+    if let Some(guidelines) = body.guidelines {
+        canvas.guidelines = guidelines;
+    }
+    if let Some(decisions) = body.decisions {
+        canvas.decisions = decisions;
     }
     app.host.store.save_canvas(&canvas)?;
     app.live
@@ -877,6 +890,36 @@ async fn frame_export(
         .into_response())
 }
 
+// ---- webhooks -------------------------------------------------------------
+
+async fn list_webhooks(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+    Ok(Json(json!(app.host.store.webhooks(&id)?)))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NewWebhook {
+    url: String,
+    events: Option<Vec<String>>,
+}
+
+async fn create_webhook(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(body): Json<NewWebhook>,
+) -> ApiResult<Json<Value>> {
+    let webhook = app
+        .host
+        .store
+        .add_webhook(&id, &body.url, body.events.as_deref().unwrap_or(&["comment.created".into()]))?;
+    Ok(Json(json!(webhook)))
+}
+
+async fn delete_webhook(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<StatusCode> {
+    app.host.store.delete_webhook(&id)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 // ---- comments -------------------------------------------------------------
 
 async fn list_comments(
@@ -896,6 +939,22 @@ struct NewComment {
     y: Option<f64>,
     body: String,
     author: Option<String>,
+}
+
+fn dispatch_webhooks(app: Shared, canvas_id: String, event: &'static str, payload: Value) {
+    let webhooks = app.host.store.webhooks(&canvas_id).unwrap_or_default();
+    for webhook in webhooks {
+        if !webhook.events.is_empty() && !webhook.events.iter().any(|e| e == event) {
+            continue;
+        }
+        let url = webhook.url.clone();
+        let body = json!({ "event": event, "canvasId": canvas_id, "payload": payload }).to_string();
+        tokio::task::spawn_blocking(move || {
+            let _ = std::process::Command::new("curl")
+                .args(["-sS", "-X", "POST", "-H", "content-type: application/json", "-d", &body, &url])
+                .output();
+        });
+    }
 }
 
 async fn create_comment(
@@ -918,6 +977,8 @@ async fn create_comment(
         replies: Vec::new(),
     };
     app.host.store.add_comment(&comment)?;
+    let canvas_id = comment.canvas_id.clone();
+    dispatch_webhooks(app.clone(), canvas_id, "comment.created", json!(comment.clone()));
     app.live
         .send(json!({"type": "comment.created", "comment": comment}));
     Ok(Json(comment))

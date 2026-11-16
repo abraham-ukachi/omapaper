@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.9.0-beta.1] - 2026-11-16
+
+### Added
+- :busts_in_silhouette: Phase D: follow mode, activity feed, per-frame editing indicators, element links, view/comment/edit modes.
+- :robot: Phase E: webhook registration and dispatch, taste memory UI.
+- :package: Phase G: canvas/file dashboard search and view filters.
+
+### Notes
+- Beta release. Advanced Phase E/F items (built-in agent runner, data sync, shaders) remain planned.
+
 ## [0.8.0-beta.2] - 2026-11-16
 
 ### Fixed

@@ -100,6 +100,9 @@
           <button class="tab" data-tab="inspect" role="tab">Inspect</button>
           <button class="tab" data-tab="tokens" role="tab">Tokens</button>
           <button class="tab" data-tab="comments" role="tab">Comments <span id="commentCount" class="count"></span></button>
+          <button class="tab" data-tab="activity" role="tab">Activity</button>
+          <button class="tab" data-tab="taste" role="tab">Taste</button>
+          <button class="tab" data-tab="webhooks" role="tab">Webhooks</button>
         </div>
 
         <section id="pane-dashboard" class="pane">
@@ -166,6 +169,7 @@
               <a id="exportHtml" class="ghost small" download>html</a>
               <a id="exportPng" class="ghost small" download>png</a>
               <a id="exportPdf" class="ghost small" download>pdf</a>
+              <button id="copyLink" class="ghost small" title="Copy a link to this selection">link</button>
             </div>
 
             <div class="rail-label">versions</div>
@@ -194,6 +198,34 @@
             </div>
           </div>
           <div id="commentList" class="comment-list"></div>
+        </section>
+
+        <section id="pane-activity" class="pane" hidden>
+          <div class="pane-intro">
+            <p class="kicker">activity</p>
+            <p class="muted">Recent canvas events for humans and agents.</p>
+          </div>
+          <div id="activityList" class="comment-list"></div>
+        </section>
+
+        <section id="pane-taste" class="pane" hidden>
+          <div class="pane-intro">
+            <p class="kicker">taste memory</p>
+            <p class="muted">Guidelines and decisions this canvas remembers.</p>
+          </div>
+          <div id="tasteBody" class="comment-list"></div>
+        </section>
+
+        <section id="pane-webhooks" class="pane" hidden>
+          <div class="pane-intro">
+            <p class="kicker">webhooks</p>
+            <p class="muted">Outbound notifications for canvas events.</p>
+            <div class="actions">
+              <input id="webhookUrl" placeholder="https://example.com/hook" aria-label="Webhook URL">
+              <button id="addWebhook" class="primary small">Add</button>
+            </div>
+          </div>
+          <div id="webhookList" class="comment-list"></div>
         </section>
       </aside>
     </div>

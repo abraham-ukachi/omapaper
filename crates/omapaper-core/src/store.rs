@@ -169,6 +169,14 @@ impl Store {
                   bytes BLOB NOT NULL,
                   created_at INTEGER NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS webhooks (
+                  id TEXT PRIMARY KEY,
+                  canvas_id TEXT NOT NULL,
+                  url TEXT NOT NULL,
+                  events TEXT NOT NULL,
+                  created_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS webhooks_canvas ON webhooks (canvas_id);
                 "#,
             )?;
             Ok(())
@@ -647,6 +655,62 @@ impl Store {
                     |row| Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?)),
                 )
                 .optional()?)
+        })
+    }
+
+    // ---- webhooks ----------------------------------------------------------
+
+    pub fn webhooks(&self, canvas_id: &str) -> Result<Vec<Webhook>> {
+        self.with(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, canvas_id, url, events, created_at FROM webhooks WHERE canvas_id = ?1 ORDER BY created_at",
+            )?;
+            let rows = stmt.query_map(params![canvas_id], |row| {
+                let events: String = row.get(3)?;
+                Ok(Webhook {
+                    id: row.get(0)?,
+                    canvas_id: row.get(1)?,
+                    url: row.get(2)?,
+                    events: serde_json::from_str(&events).unwrap_or_default(),
+                    created_at: row.get(4)?,
+                })
+            })?;
+            let mut out = Vec::new();
+            for row in rows {
+                out.push(row?);
+            }
+            Ok(out)
+        })
+    }
+
+    pub fn add_webhook(&self, canvas_id: &str, url: &str, events: &[String]) -> Result<Webhook> {
+        let webhook = Webhook {
+            id: new_id(),
+            canvas_id: canvas_id.into(),
+            url: url.into(),
+            events: events.to_vec(),
+            created_at: now_ms(),
+        };
+        self.with(|conn| {
+            conn.execute(
+                "INSERT INTO webhooks (id, canvas_id, url, events, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    webhook.id,
+                    webhook.canvas_id,
+                    webhook.url,
+                    serde_json::to_string(&webhook.events)?,
+                    webhook.created_at,
+                ],
+            )?;
+            Ok(())
+        })?;
+        Ok(webhook)
+    }
+
+    pub fn delete_webhook(&self, id: &str) -> Result<()> {
+        self.with(|conn| {
+            conn.execute("DELETE FROM webhooks WHERE id = ?1", params![id])?;
+            Ok(())
         })
     }
 }
