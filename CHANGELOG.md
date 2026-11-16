@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.4.1] - 2026-11-16
+
+### Added
+- :iphone: Touch-friendly node selection inside frames (no click delay).
+- :iphone: Mobile UX polish: touch-action, overscroll containment, and font sizing to avoid input zoom.
+
+### Notes
+- Completes the v0.4 mobile editing pass.
+
 ## [0.4.0-beta.3] - 2026-11-16
 
 ### Added

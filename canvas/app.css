@@ -26,6 +26,8 @@ body {
   font-size: 12px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
+  overscroll-behavior: contain;
 }
 
 button, input, select, textarea { font: inherit; color: inherit; }

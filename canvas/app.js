@@ -417,22 +417,15 @@ function wireFrame(frameId) {
   const iframe = element?.querySelector("iframe");
   const doc = iframe?.contentDocument;
   if (!doc) return;
-  doc.addEventListener("click", (event) => {
-    event.preventDefault();
-    if (state.selectedFrameId !== frameId) {
-      state.selectedFrameId = frameId;
-      store.set("frame", frameId);
-      renderRail();
-    }
-    const target = event.target.closest("[data-op-id]") || event.target;
-    if (!(target instanceof Element)) return;
+  let lastPointerSelect = 0;
+  const selectNode = (target, shiftKey) => {
     const node = {
       id: target.getAttribute("data-op-id") || "",
       tag: target.tagName.toLowerCase(),
       label: target.getAttribute("data-name") || target.getAttribute("data-op-id") || target.tagName.toLowerCase(),
       frameId,
     };
-    if (event.shiftKey) {
+    if (shiftKey) {
       const existing = state.selectedNodes.findIndex((entry) => entry.id === node.id && entry.frameId === frameId);
       if (existing >= 0) state.selectedNodes.splice(existing, 1);
       else state.selectedNodes.push(node);
@@ -447,6 +440,34 @@ function wireFrame(frameId) {
     }
     if (!state.selectedNodes.length) target.setAttribute("data-op-selected", "");
     selectFrameNode(frameId);
+  };
+
+  doc.addEventListener("click", (event) => {
+    if (Date.now() - lastPointerSelect < 700) return;
+    event.preventDefault();
+    if (state.selectedFrameId !== frameId) {
+      state.selectedFrameId = frameId;
+      store.set("frame", frameId);
+      renderRail();
+    }
+    const target = event.target.closest("[data-op-id]") || event.target;
+    if (!(target instanceof Element)) return;
+    selectNode(target, event.shiftKey);
+  });
+
+  // Touch-friendly selection (avoids the 300ms click delay).
+  doc.addEventListener("pointerup", (event) => {
+    if (event.pointerType === "mouse") return;
+    event.preventDefault();
+    if (state.selectedFrameId !== frameId) {
+      state.selectedFrameId = frameId;
+      store.set("frame", frameId);
+      renderRail();
+    }
+    const target = event.target.closest("[data-op-id]") || event.target;
+    if (!(target instanceof Element)) return;
+    lastPointerSelect = Date.now();
+    selectNode(target, false);
   });
   doc.addEventListener("mousemove", (event) => {
     const now = Date.now();
