@@ -102,6 +102,7 @@ pub fn router(app: Shared) -> Router {
         )
         .route("/api/frames/{id}/screenshot", get(frame_screenshot))
         .route("/api/frames/{id}/export", get(frame_export))
+        .route("/i/{id}.png", get(live_image))
         .route("/api/comments/{id}", patch(patch_comment))
         .route("/api/comments/{id}/replies", post(reply_comment))
         .route("/mcp", post(mcp))
@@ -791,6 +792,36 @@ async fn frame_screenshot(
 #[derive(Deserialize)]
 struct ExportQuery {
     format: Option<String>,
+}
+
+async fn live_image(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+) -> ApiResult<Response> {
+    let frame = app
+        .host
+        .store
+        .get_frame(&id)?
+        .ok_or_else(|| ApiError::not_found(format!("no frame `{id}`")))?;
+    let canvas = app.host.store.get_canvas(&frame.canvas_id)?;
+    let tokens_css = canvas
+        .as_ref()
+        .map(|c| app.tokens_css(c))
+        .unwrap_or_default();
+    let doc = render::frame_document(&frame, &app.theme(), &tokens_css);
+    let png = app
+        .host
+        .renderer
+        .screenshot(&doc, frame.width, frame.height, 2.0)
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/png".to_string()),
+            (header::CACHE_CONTROL, "no-cache".to_string()),
+        ],
+        png,
+    )
+        .into_response())
 }
 
 async fn frame_export(

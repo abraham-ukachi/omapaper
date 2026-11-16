@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.8.0-beta.1] - 2026-11-16
+
+### Added
+- :framed_picture: Phase C: public live frame image URLs at `/i/{frameId}.png`.
+
+### Notes
+- Beta release. Website/GitHub/live-app imports and React/Tailwind export remain planned.
+
 ## [0.7.0-beta.1] - 2026-11-16
 
 ### Added
