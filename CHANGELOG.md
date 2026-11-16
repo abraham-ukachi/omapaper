@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.6.0-beta.1] - 2026-11-16
+
+### Added
+- :art: Phase A canvas editor tools: select, hand, rectangle, ellipse, text.
+- :art: Click-to-insert shapes/text into a frame with positioned layers.
+- :art: Layer list in the inspector with selection and deletion.
+- :mag: Zoom presets (50/100/200%) and pixel grid at high zoom.
+- :see_no_evil: Hide-all-UI toggle.
+
+### Notes
+- Beta release. Phase A foundation; pen paths, rich text, rulers/guides and full layer tree remain in progress.
+
 ## [0.5.0-beta.1] - 2026-11-16
 
 ### Added

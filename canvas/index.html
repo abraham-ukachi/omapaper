@@ -37,11 +37,22 @@
         <select id="themeSelect" aria-label="Preview theme"></select>
       </label>
 
+      <div class="tools" role="group" aria-label="Tools">
+        <button id="toolSelect" class="tool active" data-tool="select" title="Select (V)">V</button>
+        <button id="toolHand" class="tool" data-tool="hand" title="Hand (H)">H</button>
+        <button id="toolRect" class="tool" data-tool="rect" title="Rectangle (R)">R</button>
+        <button id="toolEllipse" class="tool" data-tool="ellipse" title="Ellipse (O)">O</button>
+        <button id="toolText" class="tool" data-tool="text" title="Text (T)">T</button>
+      </div>
+
       <div class="zoom" role="group" aria-label="Zoom">
+        <button id="zoom50" class="icon small" title="Zoom 50%">50</button>
         <button id="zoomOut" class="icon" title="Zoom out (−)">−</button>
         <button id="zoomLabel" class="zoom-label" title="Reset zoom">100%</button>
         <button id="zoomIn" class="icon" title="Zoom in (+)">+</button>
+        <button id="zoom200" class="icon small" title="Zoom 200%">200</button>
       </div>
+      <button id="hideUiBtn" class="icon" title="Hide UI (.)" aria-label="Hide UI">◐</button>
 
       <button id="duplicateCanvasBtn" class="ghost" title="Duplicate this canvas">Duplicate</button>
       <button id="shareBtn" class="ghost" title="Copy a shareable link">Share</button>
@@ -132,6 +143,9 @@
               </select>
             </div>
             <div id="selectionInfo" class="selection"></div>
+
+            <div class="rail-label">layers</div>
+            <div id="layerList" class="layer-list"></div>
             <div class="actions">
               <button id="undoFrame" class="ghost small" title="Undo last frame change">Undo</button>
               <button id="redoFrame" class="ghost small" title="Redo last frame change">Redo</button>

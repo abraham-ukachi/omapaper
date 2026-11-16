@@ -36,6 +36,7 @@ const state = {
   selectedFrameId: store.get("frame", ""),
   selectedNode: null,
   selectedNodes: [],
+  tool: "select",
   frameFilter: "",
   tab: "dashboard",
   peerId: store.get("peer", "") || crypto.randomUUID(),
@@ -444,6 +445,18 @@ function wireFrame(frameId) {
 
   doc.addEventListener("click", (event) => {
     if (Date.now() - lastPointerSelect < 700) return;
+    if (state.tool !== "select") {
+      if (state.tool === "hand") return;
+      event.preventDefault();
+      event.stopPropagation();
+      const kind = state.tool === "rect" ? "rect" : state.tool === "ellipse" ? "ellipse" : "text";
+      const iframeRect = iframe.getBoundingClientRect();
+      const x = (event.clientX - iframeRect.left) / state.zoom;
+      const y = (event.clientY - iframeRect.top) / state.zoom;
+      createShape(frameId, kind, x, y);
+      setTool("select");
+      return;
+    }
     event.preventDefault();
     if (state.selectedFrameId !== frameId) {
       state.selectedFrameId = frameId;
@@ -566,6 +579,7 @@ function renderPanel() {
   }
   renderTokens();
   renderComments();
+  renderLayerList();
   $("#commentCount").textContent = state.comments.filter((c) => !c.resolved).length || "";
   const anchor = state.selectedNode
     ? `on <b>${escapeHtml(state.selectedNode.label)}</b>`
@@ -1379,10 +1393,118 @@ async function renameCanvas() {
 
 // ---- zoom and play --------------------------------------------------------
 
+async function saveFrameHtmlFromDom(frameId) {
+  const frame = state.frames.find((item) => item.id === frameId);
+  const element = frameElements.get(frameId);
+  const iframe = element?.querySelector("iframe");
+  const doc = iframe?.contentDocument;
+  if (!frame || !doc) return;
+  const html = `<!doctype html>\n${doc.documentElement.outerHTML}`;
+  const editor = $("#htmlEditor");
+  if (editor && document.activeElement !== editor) editor.value = html;
+  try {
+    await api(`/api/frames/${frameId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ html }),
+    });
+    frame.html = html;
+    frame.revision += 1;
+    renderLayerList();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+function createShape(frameId, kind, x, y) {
+  const element = frameElements.get(frameId);
+  const iframe = element?.querySelector("iframe");
+  const doc = iframe?.contentDocument;
+  if (!doc) return;
+  const body = doc.body;
+  if (!body) return;
+  if (getComputedStyle(body).position === "static") body.style.position = "relative";
+  const node = doc.createElement(kind === "text" ? "p" : "div");
+  const id = `op-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  node.setAttribute("data-op-id", id);
+  node.setAttribute("data-name", kind);
+  const width = kind === "text" ? 140 : 96;
+  const height = kind === "text" ? 28 : 72;
+  node.style.cssText = `position:absolute;left:${Math.max(0, Math.round(x))}px;top:${Math.max(0, Math.round(y))}px;width:${width}px;height:${height}px;box-sizing:border-box;`;
+  if (kind === "rect") {
+    node.style.background = "rgba(127,127,127,.16)";
+    node.style.border = "1px solid currentColor";
+  } else if (kind === "ellipse") {
+    node.style.background = "rgba(127,127,127,.16)";
+    node.style.border = "1px solid currentColor";
+    node.style.borderRadius = "50%";
+  } else {
+    node.textContent = "Text";
+    node.style.color = "inherit";
+    node.style.display = "flex";
+    node.style.alignItems = "center";
+  }
+  body.appendChild(node);
+  state.selectedNode = { id, tag: node.tagName.toLowerCase(), label: kind, frameId };
+  state.selectedNodes = [state.selectedNode];
+  for (const marked of doc.querySelectorAll("[data-op-selected]")) marked.removeAttribute("data-op-selected");
+  node.setAttribute("data-op-selected", "");
+  selectFrameNode(frameId);
+  renderLayerList();
+  saveFrameHtmlFromDom(frameId);
+}
+
+function setTool(tool) {
+  state.tool = tool;
+  for (const button of $$(".tool")) button.classList.toggle("active", button.dataset.tool === tool);
+  document.body.dataset.tool = tool;
+}
+
+function renderLayerList() {
+  const container = $("#layerList");
+  if (!container) return;
+  const frame = selectedFrame();
+  if (!frame) {
+    container.innerHTML = "";
+    return;
+  }
+  const element = frameElements.get(frame.id);
+  const iframe = element?.querySelector("iframe");
+  const doc = iframe?.contentDocument;
+  if (!doc) {
+    container.innerHTML = "";
+    return;
+  }
+  const nodes = Array.from(doc.querySelectorAll("[data-op-id]"));
+  container.innerHTML = "";
+  for (const node of nodes) {
+    const id = node.getAttribute("data-op-id") || "";
+    const tag = node.tagName.toLowerCase();
+    const name = node.getAttribute("data-name") || id;
+    const row = document.createElement("div");
+    row.className = "layer-row";
+    row.innerHTML = `<span class="layer-name">${escapeHtml(name)} <small>${escapeHtml(tag)}</small></span><button class="layer-del" title="Delete layer" type="button">×</button>`;
+    row.addEventListener("click", (event) => {
+      if (event.target.classList.contains("layer-del")) return;
+      state.selectedNode = { id, tag, label: name, frameId: frame.id };
+      state.selectedNodes = [state.selectedNode];
+      for (const marked of doc.querySelectorAll("[data-op-selected]")) marked.removeAttribute("data-op-selected");
+      node.setAttribute("data-op-selected", "");
+      renderPanel();
+    });
+    row.querySelector(".layer-del").addEventListener("click", (event) => {
+      event.stopPropagation();
+      node.remove();
+      saveFrameHtmlFromDom(frame.id);
+    });
+    container.appendChild(row);
+  }
+}
+
 function applyZoom() {
   state.zoom = Math.min(2, Math.max(0.25, state.zoom));
   $("#stage").style.zoom = String(state.zoom);
   $("#zoomLabel").textContent = `${Math.round(state.zoom * 100)}%`;
+  $("#stage").classList.toggle("pixel-grid", state.zoom >= 3);
   store.set("zoom", String(state.zoom));
 }
 
@@ -1540,6 +1662,13 @@ function bind() {
     state.zoom = 1;
     applyZoom();
   };
+  $("#zoom50").onclick = () => { state.zoom = 0.5; applyZoom(); };
+  $("#zoom200").onclick = () => { state.zoom = 2; applyZoom(); };
+
+  for (const button of $$(".tool")) {
+    button.onclick = () => setTool(button.dataset.tool);
+  }
+  $("#hideUiBtn").onclick = () => document.body.classList.toggle("ui-hidden");
 
   $("#themeSelect").onchange = (event) => {
     state.viewTheme = event.target.value;
@@ -1599,6 +1728,18 @@ function bind() {
     } else if (event.key === "-") {
       state.zoom -= 0.1;
       applyZoom();
+    } else if (event.key.toLowerCase() === "v") {
+      setTool("select");
+    } else if (event.key.toLowerCase() === "h") {
+      setTool("hand");
+    } else if (event.key.toLowerCase() === "r") {
+      setTool("rect");
+    } else if (event.key.toLowerCase() === "o") {
+      setTool("ellipse");
+    } else if (event.key.toLowerCase() === "t") {
+      setTool("text");
+    } else if (event.key === ".") {
+      document.body.classList.toggle("ui-hidden");
     }
   });
 
