@@ -102,7 +102,7 @@ pub fn router(app: Shared) -> Router {
         )
         .route("/api/frames/{id}/screenshot", get(frame_screenshot))
         .route("/api/frames/{id}/export", get(frame_export))
-        .route("/i/{id}.png", get(live_image))
+        .route("/i/{filename}", get(live_image))
         .route("/api/comments/{id}", patch(patch_comment))
         .route("/api/comments/{id}/replies", post(reply_comment))
         .route("/mcp", post(mcp))
@@ -796,8 +796,13 @@ struct ExportQuery {
 
 async fn live_image(
     State(app): State<Shared>,
-    Path(id): Path<String>,
+    Path(filename): Path<String>,
 ) -> ApiResult<Response> {
+    let id = filename
+        .trim_end_matches(".png")
+        .trim_end_matches(".jpg")
+        .trim_end_matches(".jpeg")
+        .to_string();
     let frame = app
         .host
         .store

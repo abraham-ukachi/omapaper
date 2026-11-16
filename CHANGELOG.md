@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.8.0-beta.2] - 2026-11-16
+
+### Fixed
+- :bug: Fixed live image route registration (`/i/{filename}`).
+
 ## [0.8.0-beta.1] - 2026-11-16
 
 ### Added
