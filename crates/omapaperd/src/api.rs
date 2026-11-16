@@ -1143,16 +1143,8 @@ async fn push_sync(State(app): State<Shared>, Path(id): Path<String>) -> ApiResu
         .ok_or_else(|| ApiError::not_found(format!("no frame `{}`", target.frame_id)))?;
     let content = match target.kind {
         SyncKind::Text => {
-            let found = omapaper_core::html::find(&frame.html, &target.selector)
-                .map_err(|error| ApiError::bad(format!("{error:?}")))?;
-            let node = found
-                .first()
-                .ok_or_else(|| ApiError::bad(format!("`{}` matched nothing", target.selector)))?;
-            omapaper_core::html::text_content(&omapaper_core::html::serialize_node(
-                &node.node,
-            ))
-            .trim()
-            .to_string()
+            omapaper_core::html::text_of(&frame.html, &target.selector)
+                .map_err(|error| ApiError::bad(format!("{error}")))?
         }
         SyncKind::Tokens => {
             let canvas = app

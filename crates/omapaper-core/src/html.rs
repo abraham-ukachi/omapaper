@@ -643,9 +643,9 @@ fn direct_text(node: &Handle) -> Option<String> {
     }
 }
 
-/// Text of every element, whitespace-collapsed (used by search).
-pub fn text_content(html: &str) -> String {
-    let dom = parse(html);
+/// All text under a node, whitespace-collapsed and untruncated (used when
+/// pushing copy back out to a file).
+pub fn node_text(node: &Handle) -> String {
     fn collect(node: &Handle, out: &mut String) {
         for child in node.children.borrow().iter() {
             match &child.data {
@@ -663,10 +663,32 @@ pub fn text_content(html: &str) -> String {
             }
         }
     }
-    let body = body(&dom);
     let mut out = String::new();
-    collect(&body, &mut out);
+    collect(node, &mut out);
     out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Text of every element, whitespace-collapsed (used by search).
+pub fn text_content(html: &str) -> String {
+    let dom = parse(html);
+    node_text(&body(&dom))
+}
+
+/// The text of the first element matching `selector`. Extracted inside the call
+/// because node handles do not outlive the document `find` parses.
+pub fn text_of(html: &str, selector: &str) -> Result<String> {
+    let groups = parse_selector(selector)?;
+    let dom = parse(html);
+    let mut found: Option<String> = None;
+    walk(body(&dom), &mut |node, _| {
+        if found.is_some() || element_name(node).is_none() {
+            return;
+        }
+        if groups.iter().any(|group| matches_group(node, group)) {
+            found = Some(node_text(node));
+        }
+    });
+    found.ok_or_else(|| HtmlError::NotFound(selector.to_string()))
 }
 
 /// One compact record per match, for `find_nodes`.
@@ -1008,6 +1030,13 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, HtmlError::NotFound(_)));
+    }
+
+    #[test]
+    fn text_of_reads_descendants() {
+        let doc = "<h1 class=\"hero\"><span>Ship</span> it &amp; <b>smile</b></h1>";
+        assert_eq!(text_of(doc, "h1.hero").unwrap(), "Ship it & smile");
+        assert!(text_of(doc, "p.nope").is_err());
     }
 
     #[test]

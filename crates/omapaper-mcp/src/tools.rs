@@ -1477,14 +1477,8 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
                 .ok_or_else(|| format!("no frame `{}`", target.frame_id))?;
             let content = match target.kind {
                 omapaper_core::model::SyncKind::Text => {
-                    let found = html::find(&frame.html, &target.selector)
-                        .map_err(|error| format!("{error:?}"))?;
-                    let node = found.first().ok_or_else(|| {
-                        format!("`{}` matched nothing", target.selector)
-                    })?;
-                    html::text_content(&html::serialize_node(&node.node))
-                        .trim()
-                        .to_string()
+                    html::text_of(&frame.html, &target.selector)
+                        .map_err(|error| error.to_string())?
                 }
                 omapaper_core::model::SyncKind::Tokens => {
                     let canvas = host

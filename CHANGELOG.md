@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.11.0-beta.2] - 2026-11-16
+
+### Fixed
+- :bug: Pushing an element's text wrote an empty file: text is now read while the parsed document is still alive (`html::text_of`), with a test for nested markup.
+
 ## [0.11.0-beta.1] - 2026-11-16
 
 ### Added
