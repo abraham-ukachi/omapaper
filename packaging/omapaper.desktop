@@ -5,6 +5,7 @@ GenericName=Design Canvas
 Comment=A free design canvas for humans and AI agents
 Exec=omapaper %U
 TryExec=omapaper
+MimeType=x-scheme-handler/omapaper;
 Icon=omapaper
 Terminal=false
 Categories=Graphics;Development;

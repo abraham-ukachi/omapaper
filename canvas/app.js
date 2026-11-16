@@ -57,6 +57,7 @@ const state = {
   agent: { configured: false },
   sources: [],
   syncs: [],
+  plugins: [],
   lastCursor: 0,
 };
 
@@ -1290,6 +1291,7 @@ async function loadSync() {
     state.sources = sources || [];
     state.syncs = syncs || [];
     renderSync();
+    loadTools();
   } catch {
     /* ignore */
   }
@@ -1445,6 +1447,79 @@ async function removeSync(id) {
     await loadSync();
   } catch (error) {
     toast(error.message, true);
+  }
+}
+
+async function loadTools() {
+  try {
+    const data = await api("/api/plugins");
+    state.plugins = data?.plugins || [];
+    renderTools();
+  } catch {
+    /* ignore */
+  }
+}
+
+function renderTools() {
+  const list = $("#pluginList");
+  if (!list) return;
+  list.innerHTML = "";
+  if (!state.plugins.length) {
+    list.innerHTML = `<p class="muted small">No plugins installed.</p>`;
+    return;
+  }
+  for (const plugin of state.plugins) {
+    const row = document.createElement("div");
+    row.className = "comment";
+    row.innerHTML = `<div class="chead"><b>${escapeHtml(plugin.name)}</b><span class="pill ${plugin.runnable ? "role" : ""}">${escapeHtml(plugin.runnable ? "runs" : "manifest")}</span></div>
+      <p class="cbody muted small">${escapeHtml(plugin.description || "")}${plugin.version ? ` · ${escapeHtml(plugin.version)}` : ""}</p>`;
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    if (plugin.runnable) {
+      const run = document.createElement("button");
+      run.className = "ghost small";
+      run.textContent = "Run";
+      run.onclick = () => runPlugin(plugin.name);
+      actions.appendChild(run);
+    }
+    if (plugin.lastRun) {
+      const output = document.createElement("p");
+      output.className = "cbody muted small";
+      output.textContent = plugin.lastRun;
+      row.appendChild(output);
+    }
+    row.appendChild(actions);
+    list.appendChild(row);
+  }
+}
+
+async function runPlugin(name) {
+  try {
+    const run = await api(`/api/plugins/${encodeURIComponent(name)}/run`, {
+      method: "POST",
+      body: JSON.stringify({ input: { canvasId: state.canvasId } }),
+    });
+    const plugin = state.plugins.find((item) => item.name === name);
+    if (plugin) {
+      plugin.lastRun = typeof run.output === "string" ? run.output.slice(0, 280) : JSON.stringify(run.output).slice(0, 280);
+    }
+    renderTools();
+    toast(`${name} exited ${run.exitCode}`);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function checkUpdate() {
+  const info = $("#updateInfo");
+  info.textContent = "Checking…";
+  try {
+    const result = await api("/api/update");
+    info.innerHTML = result.updateAvailable
+      ? `New release <b>${escapeHtml(result.latest)}</b> — <a href="${escapeHtml(result.url)}" target="_blank" rel="noreferrer">open</a>`
+      : `You are on the latest release (${escapeHtml(result.current)}).`;
+  } catch (error) {
+    info.textContent = error.message;
   }
 }
 
@@ -2388,6 +2463,7 @@ function bind() {
   $("#addSource").onclick = addSource;
   $("#pullData").onclick = pullData;
   $("#addSync").onclick = addSync;
+  $("#checkUpdate").onclick = checkUpdate;
   $("#syncKind").onchange = () => {
     $("#syncSelector").disabled = $("#syncKind").value === "tokens";
   };
@@ -2415,7 +2491,7 @@ function bind() {
 
   if (state.readonly) {
     document.body.classList.add("readonly");
-    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#newPageBtn", "#duplicateCanvasBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment", "#addCard", "#addAutomation", "#addSource", "#pullData", "#addSync"]) {
+    for (const selector of ["#newCanvasBtn", "#renameCanvas", "#newFrameBtn", "#importFrameBtn", "#newPageBtn", "#duplicateCanvasBtn", "#saveFrame", "#saveHtml", "#undoFrame", "#redoFrame", "#duplicateFrame", "#deleteFrame", "#addComment", "#addCard", "#addAutomation", "#addSource", "#pullData", "#addSync", "#checkUpdate"]) {
       const element = $(selector);
       if (element) element.hidden = true;
     }

@@ -485,6 +485,22 @@ pub fn definitions() -> Vec<Value> {
             &["agentName"],
         ),
         tool(
+            "insert_svg",
+            "Insert SVG",
+            "Place generated SVG artwork in a frame as a positioned layer. Give width and height in pixels.",
+            json!({
+                "canvasId": {"type": "string"},
+                "frameId": {"type": "string"},
+                "svg": {"type": "string"},
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "width": {"type": "number"},
+                "height": {"type": "number"},
+                "name": {"type": "string"}
+            }),
+            &["svg"],
+        ),
+        tool(
             "list_data_sources",
             "List data sources",
             "The local JSON, CSV or .env files a canvas can pull real content from.",
@@ -1419,6 +1435,49 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             });
             host.store.save_canvas(&canvas).map_err(err)?;
             Ok(text(json!(canvas.decisions)))
+        }
+        "insert_svg" => {
+            let canvas = ctx.canvas()?;
+            let svg = ctx.req_str("svg")?;
+            let mut frame = match ctx.opt_str("frameId") {
+                Some(id) => host
+                    .store
+                    .get_frame(&id)
+                    .map_err(err)?
+                    .ok_or_else(|| format!("no frame `{id}`"))?,
+                None => host
+                    .store
+                    .frames(&canvas.id)
+                    .map_err(err)?
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| "this canvas has no frames yet".to_string())?,
+            };
+            let layer = omapaper_core::assets::svg_layer(
+                &svg,
+                ctx.opt_f64("x").unwrap_or(0.0),
+                ctx.opt_f64("y").unwrap_or(0.0),
+                ctx.opt_f64("width").unwrap_or(0.0),
+                ctx.opt_f64("height").unwrap_or(0.0),
+                ctx.opt_str("name").as_deref(),
+            )?;
+            let html = omapaper_core::assets::insert_before_body(&frame.html, &layer);
+            let _ = host
+                .store
+                .push_version(&frame, Some("before an SVG insert"), 30);
+            frame.html = html;
+            frame.revision += 1;
+            host.store.save_frame(&frame).map_err(err)?;
+            let canvas_id = frame.canvas_id.clone();
+            host.emit(
+                &canvas_id,
+                json!({"type": "frame.updated", "canvasId": canvas_id, "frame": frame}),
+            );
+            Ok(text(json!({
+                "frame": frame.id,
+                "revision": frame.revision,
+                "elements": html::element_count(&frame.html)
+            })))
         }
         "list_data_sources" => {
             let canvas = ctx.canvas()?;

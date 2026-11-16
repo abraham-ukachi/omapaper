@@ -343,6 +343,16 @@
             <button id="addSync" class="primary small">Add target</button>
           </div>
           <div id="syncList" class="comment-list"></div>
+
+          <div class="pane-intro">
+            <p class="kicker">tools</p>
+            <p class="muted small">Plugins are JSON manifests in the daemon's <code>plugins</code> folder; only a manifest with a <code>command</code> can run.</p>
+          </div>
+          <div id="pluginList" class="comment-list"></div>
+          <div class="actions">
+            <button id="checkUpdate" class="ghost small">Check for updates</button>
+          </div>
+          <p id="updateInfo" class="muted small"></p>
         </section>
 
         <section id="pane-webhooks" class="pane" hidden>

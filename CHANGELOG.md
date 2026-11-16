@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.12.0-beta.1] - 2026-11-16
+
+### Added
+- :electric_plug: Plugin execution: a manifest with a `command` runs through `POST /api/plugins/{name}/run` (JSON on stdin, JSON or text back), and the Sync tab lists plugins with a Run button.
+- :link: Deep links: `omapaper://canvas/<id>` opens that canvas; the desktop entry registers the `x-scheme-handler/omapaper` MIME type and `install.sh` makes it the default.
+- :arrow_up: `GET /api/update` asks GitHub for the latest release and the Sync tab reports whether this build is current.
+- :art: MCP tool `insert_svg`, and `/api/plugins` now reports `runnable` and the manifest file.
+
+### Notes
+- Beta release. Nothing downloads or runs on its own: plugins and updates need an explicit click.
+
 ## [0.11.0-beta.2] - 2026-11-16
 
 ### Fixed

@@ -58,7 +58,10 @@ impl Args {
                     println!("omapaper {}", env!("CARGO_PKG_VERSION"));
                     std::process::exit(0);
                 }
-                other => eprintln!("unknown option `{other}` (try --help)"),
+                other => match deep_link_canvas(other) {
+                    Some(canvas) => args.canvas = Some(canvas),
+                    None => eprintln!("unknown option `{other}` (try --help)"),
+                },
             }
         }
         args.base = server
@@ -71,6 +74,21 @@ impl Args {
     fn is_local(&self) -> bool {
         self.base.contains("127.0.0.1") || self.base.contains("localhost")
     }
+}
+
+/// The canvas in `omapaper://canvas/<id>`, if `arg` is one of ours.
+fn deep_link_canvas(arg: &str) -> Option<String> {
+    let rest = arg.strip_prefix("omapaper://")?;
+    let rest = rest.trim_start_matches('/');
+    let (kind, id) = rest.split_once('/')?;
+    let id = id.trim_end_matches('/');
+    if kind != "canvas"
+        || id.is_empty()
+        || !id.chars().all(|c| c.is_ascii_alphanumeric())
+    {
+        return None;
+    }
+    Some(id.to_string())
 }
 
 fn help() -> String {
@@ -89,6 +107,8 @@ OPTIONS
     --browser         open canvases in the default browser instead of WebKit
     --help, -h        show this help
     --version, -V     print the version
+
+    omapaper://canvas/<id>  deep link: open that canvas
 
 The canvas itself is served at <url>/ and is fully usable in any browser.
 ",
@@ -447,5 +467,25 @@ fn is_executable(path: &Path) -> bool {
     #[cfg(not(unix))]
     {
         path.is_file()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::deep_link_canvas;
+
+    #[test]
+    fn deep_links_name_a_canvas() {
+        assert_eq!(
+            deep_link_canvas("omapaper://canvas/0b876536815f"),
+            Some("0b876536815f".into())
+        );
+        assert_eq!(
+            deep_link_canvas("omapaper:///canvas/abc123/"),
+            Some("abc123".into())
+        );
+        assert_eq!(deep_link_canvas("omapaper://frame/abc"), None);
+        assert_eq!(deep_link_canvas("omapaper://canvas/../etc"), None);
+        assert_eq!(deep_link_canvas("--port"), None);
     }
 }

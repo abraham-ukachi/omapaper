@@ -286,11 +286,17 @@ Steps:
 4. File dashboard with search/view modes.
 5. Plugin execution beyond manifests.
 
-## 7. Recommended next 3 milestones
+## 7. Status
 
-1. **v0.6 — Canvas editor parity**: shape tools, text, pen, layer tree, rulers/guides, zoom presets.
-2. **v0.7 — Prototypes + approvals + imports**: prototype player, approval lifecycle, website import.
-3. **v0.8 — Agent workflow depth**: built-in agent runner, board cards, taste memory, webhooks.
+- **v0.6** — canvas editor parity: shipped.
+- **v0.7** — prototypes, approvals, website import: shipped.
+- **v0.8–v0.9** — MCP depth, webhooks, presence, share links: shipped.
+- **v0.10** — Phase E: built-in agent runner, specialist board cards, @mention tasks, automations.
+- **v0.11** — Phase F: local data sources and pull, copy/token push, SVG insert hooks.
+- **v0.12** — Phase G: plugin execution, `omapaper://canvas/<id>` deep links, in-app update check.
+
+Still open: native menus and update button in the cockpit, macOS/Windows packaging,
+task status history, scheduled email digests.
 
 ## 8. Explicitly out of scope
 

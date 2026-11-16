@@ -31,6 +31,8 @@ install -Dm644 "$root/packaging/omapaper.desktop" "$data/applications/omapaper.d
 
 command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t "$data/icons/hicolor" || true
 command -v update-desktop-database >/dev/null && update-desktop-database -q "$data/applications" || true
+# omapaper://canvas/<id> deep links.
+command -v xdg-mime >/dev/null && xdg-mime default omapaper.desktop x-scheme-handler/omapaper || true
 
 say "done — launch OmaPaper from your app launcher, or run: omapaper"
 case ":$PATH:" in

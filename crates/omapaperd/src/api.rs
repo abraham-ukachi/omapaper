@@ -59,6 +59,8 @@ pub fn router(app: Shared) -> Router {
         .route("/health", get(health))
         .route("/api/version", get(version_info))
         .route("/api/plugins", get(list_plugins))
+        .route("/api/plugins/{name}/run", post(run_plugin))
+        .route("/api/update", get(update_info))
         .route("/api/info", get(info))
         .route("/api/network", get(network_info))
         .route("/api/themes", get(themes))
@@ -250,21 +252,41 @@ async fn version_info(State(app): State<Shared>) -> Json<Value> {
 }
 
 async fn list_plugins(State(app): State<Shared>) -> Json<Value> {
-    let mut plugins = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&app.plugins_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            if let Ok(text) = std::fs::read_to_string(&path) {
-                if let Ok(value) = serde_json::from_str::<Value>(&text) {
-                    plugins.push(value);
-                }
-            }
-        }
-    }
-    Json(json!({ "plugins": plugins }))
+    Json(json!({ "plugins": omapaper_core::plugins::describe(&app.plugins_dir) }))
+}
+
+#[derive(Deserialize, Default)]
+struct RunPlugin {
+    input: Option<Value>,
+}
+
+/// Runs one plugin with the posted input on its stdin. Explicit, local, and
+/// only for manifests that declare a `command`.
+async fn run_plugin(
+    State(app): State<Shared>,
+    Path(name): Path<String>,
+    body: Option<Json<RunPlugin>>,
+) -> ApiResult<Json<Value>> {
+    let input = body
+        .and_then(|Json(body)| body.input)
+        .unwrap_or_else(|| json!({ "canvasId": null }));
+    let dir = app.plugins_dir.clone();
+    let run = tokio::task::spawn_blocking(move || omapaper_core::plugins::run(&dir, &name, &input))
+        .await
+        .map_err(|error| ApiError::bad(error.to_string()))?
+        .map_err(ApiError::bad)?;
+    Ok(Json(json!(run)))
+}
+
+/// The latest GitHub release, compared with this build.
+async fn update_info() -> ApiResult<Json<Value>> {
+    let info = tokio::task::spawn_blocking(|| {
+        omapaper_core::update::check("abraham-ukachi/omapaper", VERSION)
+    })
+    .await
+    .map_err(|error| ApiError::bad(error.to_string()))?
+    .map_err(ApiError::bad)?;
+    Ok(Json(json!(info)))
 }
 
 async fn network_info(State(app): State<Shared>) -> Json<Value> {
