@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.7.0-beta.1] - 2026-11-16
+
+### Added
+- :white_check_mark: Phase B: approval lifecycle now moves approved screens to needs review after edits.
+- :arrow_forward: Shareable prototype route via `?proto=1`.
+
+### Notes
+- Beta release. Prototype connectors and full interaction matrix remain planned.
+
 ## [0.6.0-beta.2] - 2026-11-16
 
 ### Added

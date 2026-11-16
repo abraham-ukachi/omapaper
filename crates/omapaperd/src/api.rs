@@ -630,6 +630,7 @@ async fn patch_frame(
     if let Some(name) = body.name {
         frame.name = name;
     }
+    let was_approved = frame.approval == Approval::ReadyForDev;
     if let Some(document) = body.html {
         if document != frame.html {
             app.host
@@ -637,17 +638,17 @@ async fn patch_frame(
                 .push_version(&frame, Some("before edit in canvas"), 30)?;
             frame.html = document;
             frame.revision += 1;
-            frame.approval = Approval::Draft;
+            frame.approval = if was_approved { Approval::NeedsReview } else { Approval::Draft };
             frame.approval_by = None;
         }
     }
     if let Some(width) = body.width {
         frame.width = width;
-        frame.approval = Approval::Draft;
+        frame.approval = if was_approved { Approval::NeedsReview } else { Approval::Draft };
     }
     if let Some(height) = body.height {
         frame.height = height;
-        frame.approval = Approval::Draft;
+        frame.approval = if was_approved { Approval::NeedsReview } else { Approval::Draft };
     }
     if let Some(x) = body.x {
         frame.x = x;

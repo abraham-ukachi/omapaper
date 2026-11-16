@@ -111,6 +111,9 @@ async function boot() {
     await loadCanvases();
   }
   await loadCanvas(state.canvasId);
+  if (new URLSearchParams(location.search).has("proto")) {
+    setTimeout(() => openPlay(), 100);
+  }
   bind();
   applyZoom();
   connect();
