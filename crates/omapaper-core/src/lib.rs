@@ -25,6 +25,9 @@ pub use theme::{Palette, Rgb, Theme};
 /// The version of the engine (`Cargo.toml`).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Stable REST/MCP API version. Bump only on breaking changes.
+pub const API_VERSION: &str = "1";
+
 /// What `/api/health` reports.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

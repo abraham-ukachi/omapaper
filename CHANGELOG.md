@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.5.0-beta.1] - 2026-11-16
+
+### Added
+- :package: `/api/version` endpoint exposing app and stable API versions.
+- :electric_plug: Plugin manifest foundation: scans `$DATA_DIR/plugins/*.json` and exposes `/api/plugins`.
+- :gear: Tagged-release CI workflow and updated packaging metadata.
+
+### Notes
+- Beta release. Plugin code execution is not enabled yet.
+
 ## [0.4.1] - 2026-11-16
 
 ### Added

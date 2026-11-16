@@ -14,7 +14,7 @@ use omapaper_core::html;
 use omapaper_core::model::{
     color_for, new_id, now_ms, Approval, Canvas, Comment, Frame, Peer, PeerKind, Reply, Selection,
 };
-use omapaper_core::{render, theme::Theme, tokens, Health, VERSION};
+use omapaper_core::{render, theme::Theme, tokens, API_VERSION, Health, VERSION};
 use omapaper_mcp::Host;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -31,6 +31,7 @@ pub struct App {
     pub host: Host,
     pub live: Arc<Live>,
     pub data_dir: PathBuf,
+    pub plugins_dir: PathBuf,
     pub port: u16,
 }
 
@@ -52,6 +53,8 @@ pub fn router(app: Shared) -> Router {
         .route("/app.css", get(css))
         .route("/app.js", get(js))
         .route("/health", get(health))
+        .route("/api/version", get(version_info))
+        .route("/api/plugins", get(list_plugins))
         .route("/api/info", get(info))
         .route("/api/network", get(network_info))
         .route("/api/themes", get(themes))
@@ -189,12 +192,41 @@ async fn info(State(app): State<Shared>) -> Json<Value> {
     Json(json!({
         "name": "OmaPaper",
         "version": VERSION,
+        "apiVersion": API_VERSION,
         "theme": theme,
         "themes": Theme::catalogue(Some(theme.clone())).iter().map(|t| t.name.clone()).collect::<Vec<_>>(),
         "renderer": app.host.renderer.name(),
         "dataDir": app.data_dir,
         "protocol": omapaper_mcp::PROTOCOL_VERSION,
     }))
+}
+
+async fn version_info(State(app): State<Shared>) -> Json<Value> {
+    Json(json!({
+        "name": "OmaPaper",
+        "version": VERSION,
+        "apiVersion": API_VERSION,
+        "protocol": omapaper_mcp::PROTOCOL_VERSION,
+        "pluginsDir": app.plugins_dir,
+    }))
+}
+
+async fn list_plugins(State(app): State<Shared>) -> Json<Value> {
+    let mut plugins = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&app.plugins_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                if let Ok(value) = serde_json::from_str::<Value>(&text) {
+                    plugins.push(value);
+                }
+            }
+        }
+    }
+    Json(json!({ "plugins": plugins }))
 }
 
 async fn network_info(State(app): State<Shared>) -> Json<Value> {

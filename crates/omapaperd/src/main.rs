@@ -107,6 +107,8 @@ async fn main() {
     }
 
     std::fs::create_dir_all(&args.data_dir).expect("data directory");
+    let plugins_dir = args.data_dir.join("plugins");
+    std::fs::create_dir_all(&plugins_dir).expect("plugins directory");
     let db_path = args
         .db
         .clone()
@@ -122,6 +124,7 @@ async fn main() {
         host,
         live: live.clone(),
         data_dir: args.data_dir.clone(),
+        plugins_dir: plugins_dir.clone(),
         port: args.port,
     });
 
