@@ -514,7 +514,13 @@ fn replace_document(
 }
 
 /// Replaces an element's text with `text`, keeping the element itself.
-pub fn set_text(html: &str, selector: &str, text: &str, index: Option<usize>, all: bool) -> Result<String> {
+pub fn set_text(
+    html: &str,
+    selector: &str,
+    text: &str,
+    index: Option<usize>,
+    all: bool,
+) -> Result<String> {
     replace_document(html, selector, index, all, |node| {
         node.children.borrow_mut().clear();
         let child = Node::new(NodeData::Text {
@@ -525,7 +531,13 @@ pub fn set_text(html: &str, selector: &str, text: &str, index: Option<usize>, al
 }
 
 /// Renames a layer (`data-name`), leaving the HTML structure alone.
-pub fn rename(html: &str, selector: &str, name: &str, index: Option<usize>, all: bool) -> Result<String> {
+pub fn rename(
+    html: &str,
+    selector: &str,
+    name: &str,
+    index: Option<usize>,
+    all: bool,
+) -> Result<String> {
     replace_document(html, selector, index, all, |node| {
         set_attr_value(node, "data-name", name);
     })

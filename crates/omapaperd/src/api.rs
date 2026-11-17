@@ -3,6 +3,7 @@
 //! HTTP to stdio.
 
 use crate::live::Live;
+use crate::workflow;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::http::{header, StatusCode};
@@ -11,17 +12,16 @@ use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use omapaper_core::html;
-use crate::workflow;
 use omapaper_core::model::{
-    color_for, new_id, now_ms, Approval, Automation, AutomationTrigger, BoardCard, Canvas, CardRole,
-    CardStatus, Comment, DataSource, Frame, Peer, PeerKind, Reply, Selection, SourceKind, SyncKind,
-    SyncTarget,
+    color_for, new_id, now_ms, Approval, Automation, AutomationTrigger, BoardCard, Canvas,
+    CardRole, CardStatus, Comment, DataSource, Frame, Peer, PeerKind, Reply, Selection, SourceKind,
+    SyncKind, SyncTarget,
 };
-use omapaper_core::{render, theme::Theme, tokens, API_VERSION, Health, VERSION};
-use std::collections::BTreeMap;
+use omapaper_core::{render, theme::Theme, tokens, Health, API_VERSION, VERSION};
 use omapaper_mcp::Host;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::net::UdpSocket;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -72,10 +72,7 @@ pub fn router(app: Shared) -> Router {
             "/api/canvases/{id}",
             get(get_canvas).patch(patch_canvas).delete(delete_canvas),
         )
-        .route(
-            "/api/canvases/{id}/pages",
-            post(create_page),
-        )
+        .route("/api/canvases/{id}/pages", post(create_page))
         .route(
             "/api/canvases/{id}/pages/{page}",
             patch(patch_page).delete(delete_page),
@@ -98,10 +95,7 @@ pub fn router(app: Shared) -> Router {
             "/api/canvases/{id}/cards",
             get(list_cards).post(create_card),
         )
-        .route(
-            "/api/cards/{id}",
-            patch(patch_card).delete(delete_card),
-        )
+        .route("/api/cards/{id}", patch(patch_card).delete(delete_card))
         .route("/api/cards/{id}/run", post(run_card))
         .route(
             "/api/canvases/{id}/sources",
@@ -109,7 +103,10 @@ pub fn router(app: Shared) -> Router {
         )
         .route("/api/sources/{id}", delete(delete_source))
         .route("/api/canvases/{id}/pull", post(pull_data))
-        .route("/api/canvases/{id}/syncs", get(list_syncs).post(create_sync))
+        .route(
+            "/api/canvases/{id}/syncs",
+            get(list_syncs).post(create_sync),
+        )
         .route("/api/syncs/{id}", delete(delete_sync))
         .route("/api/syncs/{id}/push", post(push_sync))
         .route(
@@ -479,7 +476,9 @@ async fn create_page(
         .store
         .get_canvas(&id)?
         .ok_or_else(|| ApiError::not_found(format!("no canvas `{id}`")))?;
-    let name = body.name.unwrap_or_else(|| format!("Page {}", canvas.pages.len() + 1));
+    let name = body
+        .name
+        .unwrap_or_else(|| format!("Page {}", canvas.pages.len() + 1));
     canvas.pages.push(omapaper_core::model::Page::new(name));
     app.host.store.save_canvas(&canvas)?;
     app.live
@@ -706,17 +705,29 @@ async fn patch_frame(
                 .push_version(&frame, Some("before edit in canvas"), 30)?;
             frame.html = document;
             frame.revision += 1;
-            frame.approval = if was_approved { Approval::NeedsReview } else { Approval::Draft };
+            frame.approval = if was_approved {
+                Approval::NeedsReview
+            } else {
+                Approval::Draft
+            };
             frame.approval_by = None;
         }
     }
     if let Some(width) = body.width {
         frame.width = width;
-        frame.approval = if was_approved { Approval::NeedsReview } else { Approval::Draft };
+        frame.approval = if was_approved {
+            Approval::NeedsReview
+        } else {
+            Approval::Draft
+        };
     }
     if let Some(height) = body.height {
         frame.height = height;
-        frame.approval = if was_approved { Approval::NeedsReview } else { Approval::Draft };
+        frame.approval = if was_approved {
+            Approval::NeedsReview
+        } else {
+            Approval::Draft
+        };
     }
     if let Some(x) = body.x {
         frame.x = x;
@@ -1032,10 +1043,7 @@ fn infer_kind(path: &str) -> SourceKind {
     }
 }
 
-async fn delete_source(
-    State(app): State<Shared>,
-    Path(id): Path<String>,
-) -> ApiResult<StatusCode> {
+async fn delete_source(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<StatusCode> {
     app.host.store.delete_data_source(&id)?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1143,10 +1151,7 @@ async fn create_sync(
     Ok(Json(target))
 }
 
-async fn delete_sync(
-    State(app): State<Shared>,
-    Path(id): Path<String>,
-) -> ApiResult<StatusCode> {
+async fn delete_sync(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<StatusCode> {
     app.host.store.delete_sync_target(&id)?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1164,10 +1169,8 @@ async fn push_sync(State(app): State<Shared>, Path(id): Path<String>) -> ApiResu
         .get_frame(&target.frame_id)?
         .ok_or_else(|| ApiError::not_found(format!("no frame `{}`", target.frame_id)))?;
     let content = match target.kind {
-        SyncKind::Text => {
-            omapaper_core::html::text_of(&frame.html, &target.selector)
-                .map_err(|error| ApiError::bad(format!("{error}")))?
-        }
+        SyncKind::Text => omapaper_core::html::text_of(&frame.html, &target.selector)
+            .map_err(|error| ApiError::bad(format!("{error}")))?,
         SyncKind::Tokens => {
             let canvas = app
                 .host
@@ -1181,9 +1184,8 @@ async fn push_sync(State(app): State<Shared>, Path(id): Path<String>) -> ApiResu
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| ApiError::bad(error.to_string()))?;
     }
-    std::fs::write(&path, &content).map_err(|error| {
-        ApiError::bad(format!("cannot write {}: {error}", path.display()))
-    })?;
+    std::fs::write(&path, &content)
+        .map_err(|error| ApiError::bad(format!("cannot write {}: {error}", path.display())))?;
     app.host.store.touch_sync_target(&id)?;
     Ok(Json(json!({
         "path": path.display().to_string(),
@@ -1193,7 +1195,10 @@ async fn push_sync(State(app): State<Shared>, Path(id): Path<String>) -> ApiResu
 
 // ---- webhooks -------------------------------------------------------------
 
-async fn list_webhooks(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+async fn list_webhooks(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
     Ok(Json(json!(app.host.store.webhooks(&id)?)))
 }
 
@@ -1209,14 +1214,20 @@ async fn create_webhook(
     Path(id): Path<String>,
     Json(body): Json<NewWebhook>,
 ) -> ApiResult<Json<Value>> {
-    let webhook = app
-        .host
-        .store
-        .add_webhook(&id, &body.url, body.events.as_deref().unwrap_or(&["comment.created".into()]))?;
+    let webhook = app.host.store.add_webhook(
+        &id,
+        &body.url,
+        body.events
+            .as_deref()
+            .unwrap_or(&["comment.created".into()]),
+    )?;
     Ok(Json(json!(webhook)))
 }
 
-async fn delete_webhook(State(app): State<Shared>, Path(id): Path<String>) -> ApiResult<StatusCode> {
+async fn delete_webhook(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+) -> ApiResult<StatusCode> {
     app.host.store.delete_webhook(&id)?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1314,8 +1325,8 @@ async fn patch_card(
         }
     }
     if let Some(role) = body.role.as_deref() {
-        card.role = CardRole::parse(role)
-            .ok_or_else(|| ApiError::bad(format!("unknown role `{role}`")))?;
+        card.role =
+            CardRole::parse(role).ok_or_else(|| ApiError::bad(format!("unknown role `{role}`")))?;
     }
     if let Some(result) = body.result {
         card.result = Some(result);
@@ -1389,12 +1400,14 @@ async fn create_automation(
             .ok_or_else(|| ApiError::bad(format!("unknown trigger `{trigger}`")))?;
     }
     if let Some(role) = body.role.as_deref() {
-        automation.role = CardRole::parse(role)
-            .ok_or_else(|| ApiError::bad(format!("unknown role `{role}`")))?;
+        automation.role =
+            CardRole::parse(role).ok_or_else(|| ApiError::bad(format!("unknown role `{role}`")))?;
     }
     automation.interval_minutes = body.interval_minutes.filter(|minutes| *minutes > 0);
     if automation.trigger == AutomationTrigger::Schedule && automation.interval_minutes.is_none() {
-        return Err(ApiError::bad("a scheduled automation needs `intervalMinutes`"));
+        return Err(ApiError::bad(
+            "a scheduled automation needs `intervalMinutes`",
+        ));
     }
     app.host.store.add_automation(&automation)?;
     Ok(Json(automation))
@@ -1465,7 +1478,12 @@ struct NewComment {
     author: Option<String>,
 }
 
-pub(crate) fn dispatch_webhooks(app: Shared, canvas_id: String, event: &'static str, payload: Value) {
+pub(crate) fn dispatch_webhooks(
+    app: Shared,
+    canvas_id: String,
+    event: &'static str,
+    payload: Value,
+) {
     let webhooks = app.host.store.webhooks(&canvas_id).unwrap_or_default();
     for webhook in webhooks {
         if !webhook.events.is_empty() && !webhook.events.iter().any(|e| e == event) {
@@ -1475,7 +1493,16 @@ pub(crate) fn dispatch_webhooks(app: Shared, canvas_id: String, event: &'static 
         let body = json!({ "event": event, "canvasId": canvas_id, "payload": payload }).to_string();
         tokio::task::spawn_blocking(move || {
             let _ = std::process::Command::new("curl")
-                .args(["-sS", "-X", "POST", "-H", "content-type: application/json", "-d", &body, &url])
+                .args([
+                    "-sS",
+                    "-X",
+                    "POST",
+                    "-H",
+                    "content-type: application/json",
+                    "-d",
+                    &body,
+                    &url,
+                ])
                 .output();
         });
     }
@@ -1519,7 +1546,12 @@ async fn create_comment(
         &format!("New comment from {}: {}", comment.author, comment.body),
     );
     let canvas_id = comment.canvas_id.clone();
-    dispatch_webhooks(app.clone(), canvas_id, "comment.created", json!(comment.clone()));
+    dispatch_webhooks(
+        app.clone(),
+        canvas_id,
+        "comment.created",
+        json!(comment.clone()),
+    );
     app.live
         .send(json!({"type": "comment.created", "comment": comment}));
     Ok(Json(comment))

@@ -815,7 +815,9 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             frame.revision = 1;
             host.store.insert_frame(&frame).map_err(err)?;
             host.emit(&canvas.id, json!({"type": "frame.created", "frame": frame}));
-            Ok(text(json!({"frame": frame, "elements": html::element_count(&frame.html)})))
+            Ok(text(
+                json!({"frame": frame, "elements": html::element_count(&frame.html)}),
+            ))
         }
         "get_frame" => {
             let frame = ctx.frame()?;
@@ -1194,7 +1196,8 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
                 html
             } else {
                 let selector = ctx.selector()?;
-                html::set_text(&frame.html, &selector, &body, index, all).map_err(|e| e.to_string())?
+                html::set_text(&frame.html, &selector, &body, index, all)
+                    .map_err(|e| e.to_string())?
             };
             host.store
                 .push_version(&frame, Some("before set_text_content"), 30)
@@ -1224,7 +1227,8 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
                 html
             } else {
                 let selector = ctx.selector()?;
-                html::rename(&frame.html, &selector, &name, index, all).map_err(|e| e.to_string())?
+                html::rename(&frame.html, &selector, &name, index, all)
+                    .map_err(|e| e.to_string())?
             };
             frame.html = updated;
             frame.revision += 1;
@@ -1243,8 +1247,8 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
                 let mut html = frame.html.clone();
                 for id in ids {
                     let selector = html::selector_for_id(&id);
-                    html = html::delete(&html, &selector, None, false)
-                        .map_err(|e| e.to_string())?;
+                    html =
+                        html::delete(&html, &selector, None, false).map_err(|e| e.to_string())?;
                 }
                 html
             } else {
@@ -1481,9 +1485,10 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
         }
         "list_data_sources" => {
             let canvas = ctx.canvas()?;
-            Ok(text(
-                json!(host.store.data_sources(&canvas.id).map_err(err)?),
-            ))
+            Ok(text(json!(host
+                .store
+                .data_sources(&canvas.id)
+                .map_err(err)?)))
         }
         "pull_data" => {
             let canvas = ctx.canvas()?;
@@ -1520,7 +1525,9 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
                 frames += 1;
                 replaced += count;
             }
-            Ok(text(json!({"frames": frames, "replaced": replaced, "keys": values.len()})))
+            Ok(text(
+                json!({"frames": frames, "replaced": replaced, "keys": values.len()}),
+            ))
         }
         "push_sync" => {
             let sync_id = ctx.req_str("syncId")?;
@@ -1569,8 +1576,9 @@ pub fn call(host: &Host, name: &str, args: &Value) -> Result<Vec<Value>, String>
             let canvas = ctx.canvas()?;
             let brief = ctx.req_str("brief")?;
             let role = match ctx.opt_str("role") {
-                Some(value) => CardRole::parse(&value)
-                    .ok_or_else(|| format!("unknown role `{value}`"))?,
+                Some(value) => {
+                    CardRole::parse(&value).ok_or_else(|| format!("unknown role `{value}`"))?
+                }
                 None => CardRole::default(),
             };
             let title = ctx
@@ -1673,17 +1681,14 @@ impl Ctx<'_> {
     }
 
     fn opt_str_vec(&self, key: &str) -> Option<Vec<String>> {
-        self.args
-            .get(key)
-            .and_then(Value::as_array)
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_string)
-                    .collect()
-            })
+        self.args.get(key).and_then(Value::as_array).map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
     }
 
     fn opt_str(&self, key: &str) -> Option<String> {

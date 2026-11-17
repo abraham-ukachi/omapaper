@@ -59,7 +59,12 @@ pub fn queue_card(
         "canvasId": card.canvas_id,
         "card": card,
     }));
-    dispatch_webhooks(app.clone(), canvas_id.to_string(), "card.created", json!(card.clone()));
+    dispatch_webhooks(
+        app.clone(),
+        canvas_id.to_string(),
+        "card.created",
+        json!(card.clone()),
+    );
     Ok(card)
 }
 
@@ -137,7 +142,11 @@ pub async fn run_card(app: Shared, card_id: String) {
                     done.frame_id = Some(frame.id.clone());
                     format!("Rewrote {} (revision {})", frame.name, frame.revision)
                 } else {
-                    let page = canvas.pages.first().map(|page| page.id.clone()).unwrap_or_default();
+                    let page = canvas
+                        .pages
+                        .first()
+                        .map(|page| page.id.clone())
+                        .unwrap_or_default();
                     let mut created = Frame::new(&card.canvas_id, &page, &card.title);
                     created.html = document;
                     if app.host.store.insert_frame(&created).is_ok() {
@@ -304,7 +313,10 @@ mod tests {
 
     #[test]
     fn mentions_name_a_specialist() {
-        assert_eq!(mention_role("hey @design tighten the hero"), Some(CardRole::Design));
+        assert_eq!(
+            mention_role("hey @design tighten the hero"),
+            Some(CardRole::Design)
+        );
         assert_eq!(mention_role("@copy: shorter please"), Some(CardRole::Copy));
         assert_eq!(mention_role("@nobody here"), None);
         assert_eq!(mention_role("plain note"), None);

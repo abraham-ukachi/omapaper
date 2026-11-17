@@ -72,8 +72,8 @@ impl Store {
         }
         #[cfg(target_os = "windows")]
         {
-            if let Some(base) = std::env::var_os("LOCALAPPDATA")
-                .or_else(|| std::env::var_os("APPDATA"))
+            if let Some(base) =
+                std::env::var_os("LOCALAPPDATA").or_else(|| std::env::var_os("APPDATA"))
             {
                 return PathBuf::from(base).join("omapaper").join("omapaper.db");
             }
@@ -1303,7 +1303,12 @@ mod tests {
         let loaded = store.get_sync_target(&target.id).unwrap().unwrap();
         assert_eq!(loaded.selector, "#headline");
         store.touch_sync_target(&target.id).unwrap();
-        assert!(store.get_sync_target(&target.id).unwrap().unwrap().last_synced_at.is_some());
+        assert!(store
+            .get_sync_target(&target.id)
+            .unwrap()
+            .unwrap()
+            .last_synced_at
+            .is_some());
         store.delete_sync_target(&target.id).unwrap();
         assert!(store.sync_targets(&canvas.id).unwrap().is_empty());
     }

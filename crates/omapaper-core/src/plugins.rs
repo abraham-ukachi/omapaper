@@ -176,7 +176,8 @@ mod tests {
     use super::*;
 
     fn temp_dir(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("omapaper-plugins-{label}-{}", crate::new_id()));
+        let dir =
+            std::env::temp_dir().join(format!("omapaper-plugins-{label}-{}", crate::new_id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -205,7 +206,11 @@ mod tests {
     #[test]
     fn a_plugin_echoes_its_input_as_json() {
         let dir = temp_dir("run");
-        std::fs::write(dir.join("echo.json"), r#"{"name":"echo","command":["cat"]}"#).unwrap();
+        std::fs::write(
+            dir.join("echo.json"),
+            r#"{"name":"echo","command":["cat"]}"#,
+        )
+        .unwrap();
         let result = run(&dir, "echo", &json!({"hello": "world"})).unwrap();
         assert_eq!(result.exit_code, 0);
         assert_eq!(result.output["hello"], "world");

@@ -278,7 +278,12 @@ pub struct BoardCard {
 }
 
 impl BoardCard {
-    pub fn new(canvas_id: &str, title: impl Into<String>, brief: impl Into<String>, role: CardRole) -> BoardCard {
+    pub fn new(
+        canvas_id: &str,
+        title: impl Into<String>,
+        brief: impl Into<String>,
+        role: CardRole,
+    ) -> BoardCard {
         let now = now_ms();
         BoardCard {
             id: new_id(),

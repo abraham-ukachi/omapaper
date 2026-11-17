@@ -100,7 +100,9 @@ fn parse_csv(text: &str) -> Result<BTreeMap<String, String>, String> {
     let single = rows.len() == 1;
     for (index, row) in rows.iter().enumerate() {
         for (column, header) in headers.iter().enumerate() {
-            let Some(value) = row.get(column) else { continue };
+            let Some(value) = row.get(column) else {
+                continue;
+            };
             let key = if single {
                 header.trim().to_string()
             } else {

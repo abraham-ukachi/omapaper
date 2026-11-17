@@ -80,7 +80,10 @@ pub struct TaskContext<'a> {
 /// The user prompt: the brief plus the canvas it lands on.
 pub fn user_prompt(ctx: &TaskContext<'_>) -> String {
     let mut prompt = String::new();
-    prompt.push_str(&format!("# Task: {}\n\n{}\n", ctx.card.title, ctx.card.brief));
+    prompt.push_str(&format!(
+        "# Task: {}\n\n{}\n",
+        ctx.card.title, ctx.card.brief
+    ));
     if !ctx.canvas.guidelines.is_empty() {
         prompt.push_str("\n# Guidelines\n");
         for guideline in &ctx.canvas.guidelines {
@@ -170,7 +173,11 @@ pub fn extract_document(reply: &str) -> Option<String> {
             }
         }
     }
-    if let Some(start) = reply.find("<!doctype").or_else(|| reply.find("<!DOCTYPE")).or_else(|| reply.find("<html")) {
+    if let Some(start) = reply
+        .find("<!doctype")
+        .or_else(|| reply.find("<!DOCTYPE"))
+        .or_else(|| reply.find("<html"))
+    {
         let doc = reply[start..].trim();
         if looks_like_document(doc) {
             return Some(doc.to_string());
@@ -180,7 +187,11 @@ pub fn extract_document(reply: &str) -> Option<String> {
 }
 
 fn looks_like_document(text: &str) -> bool {
-    let head: String = text.chars().take(4096).collect::<String>().to_ascii_lowercase();
+    let head: String = text
+        .chars()
+        .take(4096)
+        .collect::<String>()
+        .to_ascii_lowercase();
     head.contains("<body") || head.contains("<!doctype") || head.contains("<html")
 }
 
@@ -254,7 +265,9 @@ mod tests {
         assert!(parse_completion(ok).unwrap().contains("<body>hi"));
         let refused = r#"{"error":{"message":"bad key"}}"#;
         assert!(parse_completion(refused).unwrap_err().contains("bad key"));
-        assert!(parse_completion("nope").unwrap_err().contains("did not return JSON"));
+        assert!(parse_completion("nope")
+            .unwrap_err()
+            .contains("did not return JSON"));
     }
 
     #[test]

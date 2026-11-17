@@ -74,8 +74,7 @@ mod tests {
 
     #[test]
     fn layers_are_positioned_and_labelled() {
-        let layer = svg_layer("<svg></svg>", 8.0, 12.0, 64.0, 64.0, Some("Logo"))
-            .expect("a layer");
+        let layer = svg_layer("<svg></svg>", 8.0, 12.0, 64.0, 64.0, Some("Logo")).expect("a layer");
         assert!(layer.contains("left:8px;top:12px"));
         assert!(layer.contains("width:64px;height:64px"));
         assert!(layer.contains("data-op-svg=\"Logo\""));

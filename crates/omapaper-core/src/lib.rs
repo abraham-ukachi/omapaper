@@ -21,10 +21,10 @@ pub mod tokens;
 pub mod update;
 
 pub use model::{
-    blank_frame_html, color_for, new_id, now_ms, Approval, Automation, AutomationTrigger, BoardCard,
-    Canvas, CanvasSummary, CardRole, CardStatus, Comment, DataSource, Decision, Frame, Guideline,
-    Page, Peer, PeerKind, Reply, Selection, SourceKind, SyncKind, SyncTarget, Token, TokenKind,
-    Version,
+    blank_frame_html, color_for, new_id, now_ms, Approval, Automation, AutomationTrigger,
+    BoardCard, Canvas, CanvasSummary, CardRole, CardStatus, Comment, DataSource, Decision, Frame,
+    Guideline, Page, Peer, PeerKind, Reply, Selection, SourceKind, SyncKind, SyncTarget, Token,
+    TokenKind, Version,
 };
 pub use store::{Result as StoreResult, Store, StoreError};
 pub use theme::{Palette, Rgb, Theme};

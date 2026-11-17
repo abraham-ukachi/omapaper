@@ -82,10 +82,7 @@ fn deep_link_canvas(arg: &str) -> Option<String> {
     let rest = rest.trim_start_matches('/');
     let (kind, id) = rest.split_once('/')?;
     let id = id.trim_end_matches('/');
-    if kind != "canvas"
-        || id.is_empty()
-        || !id.chars().all(|c| c.is_ascii_alphanumeric())
-    {
+    if kind != "canvas" || id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric()) {
         return None;
     }
     Some(id.to_string())
