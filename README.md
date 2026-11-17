@@ -45,13 +45,13 @@ It is the love child of [**Doop**](https://github.com/abraham-ukachi/doop) and [
 | Pricing | Free personal; **Team $20/seat/mo ($192/seat/yr)**; Enterprise | Paid app | **Free, forever, no subscription** |
 | Workspaces & seats | Workspaces are the paid part | — | **No workspaces, no seats, no roles** |
 | Storage | Postgres | Cloud | **One SQLite file (`~/.local/share/omapaper/omapaper.db`)** |
-| Agent surface | 42 MCP tools (stdio + HTTP) | MCP tools | **45 MCP tools (stdio + HTTP)** — the union of both, plus a few |
+| Agent surface | 42 MCP tools (stdio + HTTP) | MCP tools | **53 MCP tools (stdio + HTTP)** — the union of both, plus a few |
 | Frames | Whole HTML documents | Artboards / nodes | **Whole HTML documents** (Doop strength) + Paper-style node tools |
 | Streaming designs | `append_frame_html` chunks | — | ✅ chunked, viewers watch it appear |
 | Design tokens | Typed CSS vars, per theme | Tokens | ✅ typed, per theme, CSS/Tailwind export |
 | Comments / presence | Threads + live cursors | — | ✅ threads + live cursors + agent status |
 | Export | PNG / PDF | PNG / PDF | ✅ PNG / PDF / HTML |
-| Themes | — | — | **All 23 Omarchy themes + 2 ab-nextjs schemes**, live from `~/.config/omarchy/current/theme` |
+| Themes | — | — | **All 23 Omarchy themes + 2 ab-nextjs schemes**, live from `~/.local/state/omarchy/current/theme` |
 | License | AGPL-3.0 | Proprietary | **MIT** |
 | Built on | Bun / TypeScript / React | Electron | **100% Rust** |
 
@@ -67,11 +67,13 @@ The canvas is a single page served by the daemon at `http://127.0.0.1:4310/`:
 | 1 | *`Top bar`* | Canvas name, page tabs, theme chip, Play mode, Export, comments toggle |
 | 2 | *`Left rail`* | Pages and frames (name, size, approval state), new frame, duplicate, delete |
 | 3 | *`Stage`* | Zoomable, pannable artboards; select, inspect, drag; inline edit in Play mode |
-| 4 | *`Right panel`* | Selected node: tag, attributes, inline styles, children, computed styles, JSX |
-| 5 | *`Tokens`* | Design tokens (colour, spacing, radius, typography, shadow) with per-theme values |
-| 6 | *`Comments`* | Threads anchored to an element or a point on a page |
-| 7 | *`Presence`* | Humans, tabs and agents on the canvas, with one-line status |
-| 8 | *`Cockpit`* | Slint desktop window that starts the daemon and lists/opens canvases |
+| 4 | *`Inspector · Dashboard`* | Canvas overview: page/frame/comment/token counts, jump actions and the frame list with approval state |
+| 5 | *`Inspector · Inspect`* | Selected node: tag, attributes, inline styles, children, computed styles, JSX |
+| 6 | *`Inspector · Tokens / Comments`* | Design tokens with per-theme values; threads anchored to an element or a page point |
+| 7 | *`Inspector · Activity / Taste`* | Live event feed; design decisions the canvas remembers as taste |
+| 8 | *`Inspector · Webhooks / Agents / Sync`* | Outbound webhooks; specialist board cards and the agent runner; data sources, sync targets, plugins and the update check |
+| 9 | *`Presence`* | Humans, tabs and agents on the canvas, with one-line status |
+| 10 | *`Cockpit`* | Slint desktop window that starts the daemon and lists/opens canvases |
 
 > NOTE: Reference mockups live in `docs/design`. 📸
 
@@ -82,15 +84,15 @@ The canvas is a single page served by the daemon at `http://127.0.0.1:4310/`:
 |:------|:------------|:--------|
 | Language | Rust | 1.99 (edition 2021) |
 | Engine | `omapaper-core` | model, theme, store, tokens, HTML, render, guide |
-| MCP | `omapaper-mcp` | 46 tools, JSON-RPC over stdio + HTTP |
-| Daemon | `omapaperd` | axum 0.7, tokio, REST + WebSocket |
+| MCP | `omapaper-mcp` | 53 tools, JSON-RPC over stdio + HTTP |
+| Daemon | `omapaperd` | axum 0.8, tokio, REST + WebSocket |
 | Desktop | `omapaper` (cockpit) | Slint 1.x |
 | Canvas window | `omapaper-canvas` | GTK3 + WebKit2GTK 4.1 |
 | Canvas UI | hand-written HTML/CSS/JS | no Node, no React, no build step |
 | Storage | SQLite (rusqlite, bundled, WAL) | `~/.local/share/omapaper/omapaper.db` |
 | HTML | html5ever + markup5ever_rcdom | in-house selector subset |
 | Screenshots/PDF | headless Chromium | `OMAPPAPER_CHROMIUM` override |
-| Themes | 23 Omarchy + 2 ab-nextjs schemes | live from `~/.config/omarchy/current/theme` |
+| Themes | 23 Omarchy + 2 ab-nextjs schemes | live from `~/.local/state/omarchy/current/theme` |
 | License | MIT | © Abraham Ukachi |
 
 Binaries produced: `omapaper` (cockpit), `omapaperd` (daemon), `omapaper-mcp` (stdio MCP), `omapaper-canvas` (WebKit viewer).
@@ -118,13 +120,13 @@ Binaries produced: `omapaper` (cockpit), `omapaperd` (daemon), `omapaper-mcp` (s
 ```
 
 - A **canvas** holds **pages**, and pages hold **frames**. A frame is a complete HTML document (Doop strength) — `<!DOCTYPE html>`, `<head>`, `<style>`, `<body>` — so a design is just a web page you can open in any browser.
-- Humans draw in the canvas (served at `/`); agents drive it through 45 MCP tools over stdio or HTTP at `/mcp`. Both see the same state, live, over the WebSocket at `/ws`.
+- Humans draw in the canvas (served at `/`); agents drive it through 53 MCP tools over stdio or HTTP at `/mcp`. Both see the same state, live, over the WebSocket at `/ws`.
 - `append_frame_html` streams a design in chunks; viewers watch it appear. `get_frame_screenshot` renders the frame in headless Chromium so an agent can look at what it just drew.
 - Design tokens are typed CSS custom properties (`--color-brand`) with one value per theme; frames reference them with `var(--color-brand)`, never the literal.
 - Prototypes are attributes, not a separate file: `data-omapaper-on="click"` + `data-omapaper-action="frame:<id>"`. Play mode follows them with a back stack.
-- Themes come from Omarchy (`~/.config/omarchy/current/theme`) and fall back to Tokyo Night; the cockpit paints itself from `Theme::live_omarchy()`.
+- Themes come from Omarchy (`$XDG_STATE_HOME/omarchy/current/theme`, else `~/.local/state/omarchy/current/theme`) and fall back to Tokyo Night; the cockpit paints itself from `Theme::live_omarchy()`.
 
-Data lives under `~/.local/share/omapaper/` (override with `--data-dir` or `OMAPPAPER_DATA_DIR`). Set `OMAPPAPER_CHROMIUM` to point at a specific Chromium binary for screenshots/PDF.
+Data lives under `~/.local/share/omapaper/` (override with `--data-dir` or `OMAPPAPER_DATA_DIR`). Set `OMAPPAPER_CHROMIUM` to point at a specific Chromium binary for screenshots/PDF. The built-in agent runner reads `OMAPAPER_AGENT_API_KEY` (or `OPENAI_API_KEY`), `OMAPAPER_AGENT_BASE_URL` and `OMAPAPER_AGENT_MODEL`.
 
 
 ## Build & run 🏗️
@@ -170,17 +172,23 @@ MCP client config (stdio):
 }
 ```
 
-MCP over HTTP: `http://127.0.0.1:4310/mcp` (JSON-RPC). See [`docs/mcp.md`](./docs/mcp.md) for all 46 tools.
+MCP over HTTP: `http://127.0.0.1:4310/mcp` (JSON-RPC). See [`docs/mcp.md`](./docs/mcp.md) for all 53 tools.
 
 
 ## Roadmap 🗺️
 
 - [x] v0.1 — full local core: daemon, MCP stdio/HTTP, canvases/pages/frames, streaming, tokens, comments, presence, PNG/PDF export, all Omarchy themes, desktop cockpit, launcher icon, docs & CI
 - [x] v0.2 — richer node editing (drag/resize handles, multi-select, undo/redo history UI), HTML import
-- [x] v0.3 — team sharing over LAN (read-only viewers, no seats, no billing) — beta
 - [x] v0.3 — team sharing over LAN (read-only viewers, no seats, no billing)
-- [ ] v0.4 — other OSes and devices (macOS, Windows, mobile viewers)
-- [ ] v1.0 — stable API, plugin system, Omarchy app-store packaging
+- [x] v0.4–v0.5 — canvas editor tools (select, shapes, text, zoom presets), `/api/version`, plugin manifests, release CI
+- [x] v0.6 — resize handles, inline text editing, layer list and selection outlines
+- [x] v0.7 — approval lifecycle, shareable prototype route (`?proto=1`)
+- [x] v0.8–v0.9 — live frame images, activity feed, follow mode, webhooks, taste memory, dashboard search
+- [x] v0.10 — agent runner, specialist board cards, `@role` tasks, automations, SVG insert
+- [x] v0.11 — local data sources and pull, copy/token push, Sync tab
+- [x] v0.12 — plugin execution, `omapaper://` deep links, update check (current)
+- [ ] v0.13+ — native menus and update button in the cockpit, website import, macOS/Windows packaging
+- [ ] v1.0 — stable API, Omarchy app-store packaging
 
 > MOTTO: We'll always do [**more**](#roadmap-) 😜
 
@@ -190,11 +198,9 @@ MCP over HTTP: `http://127.0.0.1:4310/mcp` (JSON-RPC). See [`docs/mcp.md`](./doc
 - [`AGENTS.md`](./AGENTS.md) — how to work on this repo (for humans and agents)
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md) — gitmoji commits, PR flow
 - [`CHANGELOG.md`](./CHANGELOG.md) — release notes
-- [`docs/mcp.md`](./docs/mcp.md) — the 45 MCP tools in detail
+- [`docs/mcp.md`](./docs/mcp.md) — the 53 MCP tools in detail
 - Doop (the other parent): https://github.com/abraham-ukachi/doop
 - Omarchy: https://omarchy.org
 - Omacalc (theme reference): https://github.com/omacom-io/omacalc
 
 Made with 🦀 and ☕ by [Abraham Ukachi](https://github.com/abraham-ukachi). MIT licensed.
-</p>
-PY

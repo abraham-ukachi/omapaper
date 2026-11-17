@@ -1,8 +1,8 @@
 # OmaPaper MCP tools
 
-OmaPaper exposes **46 tools** over MCP, both as a stdio server (`omapaper-mcp`) and over HTTP at `http://127.0.0.1:4310/mcp` (JSON-RPC). The daemon must be running.
+OmaPaper exposes **53 tools** over MCP, both as a stdio server (`omapaper-mcp`) and over HTTP at `http://127.0.0.1:4310/mcp` (JSON-RPC). The daemon must be running.
 
-Call `get_guide` once per session before any other tool. Topics: `omapaper-instructions` (default), `workflow`, `html`, `tokens`, `prototypes`, `comments`.
+Call `get_guide` once per session before any other tool. Topics: `omapaper-instructions` (default), `workflow`, `html`, `tokens`, `prototypes`, `comments`, `board`.
 
 ## Canvas
 
@@ -75,6 +75,23 @@ Call `get_guide` once per session before any other tool. Topics: `omapaper-instr
 | `reply_to_comment` | Answer a comment thread as your agent name. |
 | `resolve_comment` | Close or reopen a comment thread. |
 
+## Assets & data
+
+| Tool | Purpose |
+|:-----|:--------|
+| `insert_svg` | Place generated SVG artwork in a frame as a positioned layer (`x`, `y`, `width`, `height`). |
+| `list_data_sources` | Local JSON, CSV or `.env` files a canvas can pull real content from. |
+| `pull_data` | Replace every `{{dotted.key}}` in the canvas frames with values from its data sources. Returns how many frames and placeholders changed. |
+| `push_sync` | Write a frame element's text (or the canvas tokens as CSS) to a sync target file. |
+
+## Board
+
+| Tool | Purpose |
+|:-----|:--------|
+| `list_board_cards` | Tasks on the canvas board: brief, specialist role, status and what came back. |
+| `create_board_card` | Queue a task for a specialist (`design`, `copy`, `code`, `review`, `research`). Humans can run it from the Agents tab or `@mention` a role in a comment. |
+| `update_board_card` | Claim a card (`working`), finish it (`done`, with a result) or report a failure. |
+
 ## Guides & decisions
 
 | Tool | Purpose |
@@ -87,17 +104,48 @@ Call `get_guide` once per session before any other tool. Topics: `omapaper-instr
 
 ## REST & WebSocket (daemon)
 
-- `GET /` — canvas UI
-- `GET /app.css`, `GET /app.js` — canvas assets
-- `GET /health` — health and version
-- `GET /api/info` — name, version, theme, themes, renderer, dataDir, protocol
-- `GET /api/themes`, `GET /api/theme`, `GET /theme.css`
-- `GET /api/canvases`, `GET /api/canvases/{id}`
-- `GET/PUT /api/frames/{id}/html`, `GET /api/frames/{id}/versions`, `GET /api/frames/{id}/screenshot`, `GET /api/frames/{id}/export`
-- `GET/POST /api/comments/{id}`
-- `GET /mcp` — MCP over HTTP (JSON-RPC)
-- `WS /ws` — presence, cursors, live edits
-- `GET /api/presence` (pruned automatically)
+UI and assets:
+
+- `GET /` — canvas UI; `GET /app.css`, `GET /app.js` — canvas assets; `GET /theme.css` — live theme as CSS
+- `GET /i/{filename}` — live frame image
+
+Status:
+
+- `GET /health`, `GET /api/version`, `GET /api/info`
+- `GET /api/themes`, `GET /api/theme`, `GET /api/network`, `GET /api/update`, `GET /api/agent`
+
+Canvases and pages:
+
+- `GET|POST /api/canvases`; `GET|PATCH|DELETE /api/canvases/{id}`; `POST /api/canvases/{id}/duplicate`
+- `POST /api/canvases/{id}/pages`; `PATCH|DELETE /api/canvases/{id}/pages/{page}`
+
+Frames:
+
+- `GET|POST /api/canvases/{id}/frames`; `GET|PATCH|DELETE /api/frames/{id}`
+- `GET /api/frames/{id}/html`; `GET /api/frames/{id}/versions`; `POST /api/frames/{id}/versions/{version}/restore`
+- `GET /api/frames/{id}/screenshot`; `POST /api/frames/{id}/svg`; `GET /api/frames/{id}/export`
+
+Comments, presence and selection:
+
+- `GET|POST /api/canvases/{id}/comments`; `PATCH /api/comments/{id}`; `POST /api/comments/{id}/replies`
+- `GET|POST /api/canvases/{id}/presence`; `GET|POST /api/canvases/{id}/selection`
+
+Webhooks and automations:
+
+- `GET|POST /api/canvases/{id}/webhooks`; `DELETE /api/webhooks/{id}`
+- `GET|POST /api/canvases/{id}/automations`; `PATCH|DELETE /api/automations/{id}`
+
+Agent board and data sync:
+
+- `GET|POST /api/canvases/{id}/cards`; `PATCH|DELETE /api/cards/{id}`; `POST /api/cards/{id}/run`
+- `GET|POST /api/canvases/{id}/sources`; `DELETE /api/sources/{id}`; `POST /api/canvases/{id}/pull`
+- `GET|POST /api/canvases/{id}/syncs`; `DELETE /api/syncs/{id}`; `POST /api/syncs/{id}/push`
+
+Plugins and protocol:
+
+- `GET /api/plugins`; `POST /api/plugins/{name}/run`
+- `POST /mcp` — MCP over HTTP (JSON-RPC)
+- `GET /ws` — WebSocket for presence, cursors and live edits
 
 ## Notes
 
@@ -105,3 +153,4 @@ Call `get_guide` once per session before any other tool. Topics: `omapaper-instr
 - Prototypes use `data-omapaper-on` and `data-omapaper-action` attributes.
 - Screenshots/PDF need Chromium (`OMAPPAPER_CHROMIUM` to override the binary).
 - Data lives under `~/.local/share/omapaper/` (override with `--data-dir` / `OMAPPAPER_DATA_DIR`).
+- The built-in agent runner reads `OMAPAPER_AGENT_API_KEY` (or `OPENAI_API_KEY`), `OMAPAPER_AGENT_BASE_URL` and `OMAPAPER_AGENT_MODEL`.

@@ -1,4 +1,4 @@
-# Plugins (foundation)
+# Plugins
 
 OmaPaper scans `$DATA_DIR/plugins/*.json` and exposes them through
 `GET /api/plugins`. Each file is a JSON object describing a plugin:
@@ -29,4 +29,3 @@ which ones are `runnable`.
 
 Nothing runs on its own: the daemon never fetches code and only starts a
 plugin when a human or an agent asks for it. Delete the manifest to uninstall.
-```

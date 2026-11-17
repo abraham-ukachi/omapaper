@@ -22,7 +22,7 @@ cd packaging && makepkg -si
 | No. | Path | What lives there |
 |:----|:-----|:-----------------|
 | 1 | `crates/omapaper-core` | Model, theme, store, tokens, HTML, render, guide. No UI, fully tested |
-| 2 | `crates/omapaper-mcp` | 45 MCP tools, JSON-RPC over stdio + HTTP |
+| 2 | `crates/omapaper-mcp` | 53 MCP tools, JSON-RPC over stdio + HTTP |
 | 3 | `crates/omapaperd` | Daemon: REST, WebSocket, embedded canvas, MCP HTTP |
 | 4 | `app` | Slint cockpit |
 | 5 | `canvas-viewer` | GTK3 + WebKit2GTK canvas window |
@@ -35,7 +35,7 @@ cd packaging && makepkg -si
 1. Follow **Omacalc**: page color + ink color, everything else is a mix of the two (5% keys, 13% borders, 16% operators & dividers, 50% muted). The primary key is inverted ink.
 2. iA Writer Mono everywhere. No icons with fills, 1.6 px rounded strokes only.
 3. The accent color is a whisper: the selected theme and the focus ring, nothing else.
-4. Themes come from Omarchy (`~/.config/omarchy/current/theme`); never hard-code a palette. Fall back to Tokyo Night.
+4. Themes come from Omarchy (`$XDG_STATE_HOME/omarchy/current/theme`, else `~/.local/state/omarchy/current/theme`); never hard-code a palette. Fall back to Tokyo Night.
 
 ## Git commit messages ✍️
 
@@ -50,6 +50,6 @@ We use [gitmoji](https://gitmoji.dev) + a short sentence in the imperative mood:
 | 🔧 | `:wrench:` | config & tooling |
 | ✅ | `:white_check_mark:` | tests |
 | 👷 | `:construction_worker:` | CI |
-| 🔖 | `:bookmark:` | a release (`Release 0.1.0`) |
+| 🔖 | `:bookmark:` | a release (`Release 0.12.0`) |
 
 Example: `:sparkles: Add the WebKit canvas viewer`

@@ -22,7 +22,7 @@ pub fn definitions() -> Vec<Value> {
         tool(
             "get_guide",
             "Get guide",
-            "The rules of designing on an OmaPaper canvas. Call once per session before any other tool; topics: omapaper-instructions (default), workflow, html, tokens, prototypes, comments.",
+            "The rules of designing on an OmaPaper canvas. Call once per session before any other tool; topics: omapaper-instructions (default), workflow, html, tokens, prototypes, comments, board.",
             json!({"topic": {"type": "string", "enum": omapaper_core::guide::TOPICS}}),
             &[],
         ),

@@ -540,7 +540,6 @@ async fn delete_page(
     app.host.store.save_canvas(&canvas)?;
     app.live
         .send(json!({"type": "canvas.updated", "canvas": canvas}));
-    // reload frames in UI happens via canvas.updated? canvas has no frames; emit frame list? UI calls loadCanvas on canvas.updated? Check.
     Ok(Json(canvas))
 }
 

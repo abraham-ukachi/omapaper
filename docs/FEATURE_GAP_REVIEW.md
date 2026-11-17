@@ -31,7 +31,7 @@ OmaPaper already has a strong local core:
 - Mobile touch basics (pointer events, pinch zoom, drawer auto-close)
 - Node selection/multi-select, inspector (tag/attrs/styles/children/computed/JSX)
 - Team sharing over LAN read-only viewers
-- Plugin manifest foundation and stable API version
+- Plugin manifests and execution, stable API version
 
 OmaPaper does **not** yet have most of the drawing/editing/tooling depth found in Doop/Paper.
 
@@ -289,14 +289,14 @@ Steps:
 ## 7. Status
 
 - **v0.6** — canvas editor parity: shipped.
-- **v0.7** — prototypes, approvals, website import: shipped.
+- **v0.7** — prototypes and approvals: shipped.
 - **v0.8–v0.9** — MCP depth, webhooks, presence, share links: shipped.
-- **v0.10** — Phase E: built-in agent runner, specialist board cards, @mention tasks, automations.
-- **v0.11** — Phase F: local data sources and pull, copy/token push, SVG insert hooks.
-- **v0.12** — Phase G: plugin execution, `omapaper://canvas/<id>` deep links, in-app update check.
+- **v0.10** — Phase E: built-in agent runner, specialist board cards, @mention tasks, automations: shipped.
+- **v0.11** — Phase F: local data sources and pull, copy/token push, SVG insert hooks: shipped.
+- **v0.12** — Phase G: plugin execution, `omapaper://canvas/<id>` deep links, in-app update check: shipped.
 
-Still open: native menus and update button in the cockpit, macOS/Windows packaging,
-task status history, scheduled email digests.
+Still open: website import, native menus and update button in the cockpit,
+macOS/Windows packaging, task status history, scheduled email digests.
 
 ## 8. Explicitly out of scope
 
