@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. Versions follow [SemVer](https://semver.org), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+## [0.12.0-beta.2] - 2026-11-17
+
+### Changed
+- :memo: The prose now agrees with the code: 53 MCP tools (not 45 or 46) everywhere, axum 0.8, the theme at `~/.local/state/omarchy/current/theme`, `docs/plugins.md` retitled, and the README roadmap rebuilt around what shipped instead of the original phases.
+- :memo: `docs/mcp.md` documents the board and data tools, the `board` guide topic and the full REST route list; README gains a screen-by-screen table of the nine inspector tabs.
+
+### Fixed
+- :bug: The design guide no longer tells agents there is no component runtime "in 0.1", and `get_guide` lists `board` among its topics.
+- :recycle: A stale `// … Check.` comment in `delete_page` is gone.
+
+### Added
+- :construction_worker: CI fails when the documented tool count drifts from `tools.rs` (`scripts/check-doc-tool-count.sh`).
+
+### Notes
+- No behaviour changes: rustfmt over the workspace, plus docs, guide text and tests untouched.
+
 ## [0.12.0-beta.1] - 2026-11-16
 
 ### Added
